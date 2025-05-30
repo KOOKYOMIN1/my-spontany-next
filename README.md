@@ -1,40 +1,32 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/pages/api-reference/create-next-app).
+# ✈️ Spontany - 감성 기반 즉흥 여행 매칭 서비스
 
-## Getting Started
+**Spontany**는 감정, 예산, 출발지를 기반으로 나와 잘 맞는 여행 메이트를 매칭해주는 즉흥 여행 웹서비스입니다.  
+GPT 기반의 감성 문장, 도시 추천, 프리미엄 매칭 기능까지 탑재된 1인 풀스택 프로젝트입니다.
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## 🌟 주요 기능
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- 🎭 **감정 기반 여행 추천** (GPT 연동)
+- 🌍 **Pexels 이미지 API로 도시 이미지 실시간 제공**
+- 🧳 **출발지 / 예산 / 동행자 정보 입력**
+- ⚡ **랜덤 매칭 및 대기열 기반 자동 매칭 시스템**
+- 💬 **매칭 시 채팅방 자동 생성 (예정)**
+- 🛡️ **NextAuth 기반 인증 시스템 (예정)**
+- 💳 **Toss Payments API 통한 프리미엄 결제 기능**
+- 🧠 **MongoDB Atlas 기반 데이터 관리**
 
-You can start editing the page by modifying `pages/index.js`. The page auto-updates as you edit the file.
+---
 
-[API routes](https://nextjs.org/docs/pages/building-your-application/routing/api-routes) can be accessed on [http://localhost:3000/api/hello](http://localhost:3000/api/hello). This endpoint can be edited in `pages/api/hello.js`.
+## 🛠 기술 스택
 
-The `pages/api` directory is mapped to `/api/*`. Files in this directory are treated as [API routes](https://nextjs.org/docs/pages/building-your-application/routing/api-routes) instead of React pages.
-
-This project uses [`next/font`](https://nextjs.org/docs/pages/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn-pages-router) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/pages/building-your-application/deploying) for more details.
+| 영역 | 기술 |
+|------|------|
+| 프론트엔드 | Next.js 15 (Pages Router), React, Styled-components |
+| 백엔드 API | Vercel Serverless Functions (`/pages/api/*.js`) |
+| DB | MongoDB Atlas |
+| 인증 | NextAuth (JWT, 예정) |
+| 결제 | Toss Payments API |
+| AI | OpenAI GPT API |
+| 기타 API | Pexels, Tequila(Kiwi.com) 등 |
+| 배포 | Vercel |
