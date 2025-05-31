@@ -1,41 +1,31 @@
-// ✅ styled-components 통합 + 로그인 팝업 작동 완성본
-import { useState, useEffect } from "react";
+// ✅ index.js (양방향 채팅 메시지 반영 + 매칭 체크 + 작성란 입력 조건 반영 완성본)
+import { useState, useEffect, useRef } from "react";
 import { useSession, signIn, signOut } from "next-auth/react";
-import DatePicker from "react-datepicker";
-import "react-datepicker/dist/react-datepicker.css";
-import { ko } from "date-fns/locale";
-import ChatBox from "../components/ChatBox";
-import MatchButton from "@/components/MatchButton";
 import styled from "styled-components";
 import axios from "axios";
 
 const Container = styled.div`
   min-height: 100vh;
-  background-image: url("https://images.unsplash.com/photo-1503264116251-35a269479413?auto=format&fit=crop&w=1600&q=80");
-  background-size: cover;
-  background-position: center;
+  background: url("https://images.unsplash.com/photo-1503264116251-35a269479413?auto=format&fit=crop&w=1600&q=80") no-repeat center/cover;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 4rem 1rem;
+  justify-content: center;
+  padding: 2rem;
 `;
 
 const Card = styled.div`
-  width: 1200px;
+  width: 700px;
   background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(16px);
   border-radius: 2rem;
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
-  padding: 2.5rem;
-  border: 1px solid #e5e7eb;
-  margin-bottom: 2.5rem;
-  position: relative;
+  padding: 2rem;
+  box-shadow: 0 0 30px rgba(0, 0, 0, 0.1);
+  text-align: center;
 `;
 
 const Title = styled.h1`
-  font-size: 1.875rem;
-  font-weight: 700;
-  text-align: center;
+  font-size: 1.8rem;
+  font-weight: bold;
   color: #1f2937;
   margin-bottom: 2rem;
 `;
@@ -43,183 +33,249 @@ const Title = styled.h1`
 const Input = styled.input`
   width: 100%;
   padding: 0.75rem 1rem;
-  font-size: 1rem;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #ccc;
   border-radius: 1rem;
-  outline: none;
-  &:focus {
-    box-shadow: 0 0 0 2px #facc15;
-  }
+  margin-bottom: 1rem;
+  font-size: 1rem;
 `;
 
 const Select = styled.select`
   width: 100%;
   padding: 0.75rem 1rem;
-  font-size: 1rem;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #ccc;
   border-radius: 1rem;
-  outline: none;
-  &:focus {
-    box-shadow: 0 0 0 2px #facc15;
-  }
-`;
-
-const ButtonGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-
-  @media (max-width: 768px) {
-    grid-template-columns: 1fr;
-  }
+  margin-bottom: 1rem;
+  font-size: 1rem;
 `;
 
 const Button = styled.button`
   width: 100%;
-  padding: 0.75rem 1rem;
+  background: #facc15;
+  border: none;
   border-radius: 1rem;
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: white;
-  background-color: ${(props) => props.color || "#facc15"};
+  padding: 1rem;
+  font-weight: bold;
+  font-size: 1.1rem;
   cursor: pointer;
-  transition: background-color 0.3s;
+  transition: 0.2s;
   &:hover {
-    background-color: ${(props) => props.hover || "#eab308"};
+    background: #eab308;
   }
 `;
 
-const SubText = styled.p`
-  margin-top: 0.5rem;
-  font-size: 0.875rem;
-  text-align: center;
-  color: #4b5563;
-`;
-
 const AuthBox = styled.div`
-  position: absolute;
-  top: 1.5rem;
-  right: 2rem;
+  text-align: right;
+  margin-bottom: 1rem;
 `;
 
-const ModalBackdrop = styled.div`
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: rgba(0, 0, 0, 0.4);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 9999;
-`;
-
-const ModalBox = styled.div`
+const ChatBox = styled.div`
+  margin-top: 2rem;
+  padding: 1rem;
+  border-radius: 1rem;
   background: white;
-  border-radius: 1.5rem;
-  padding: 2rem;
-  max-width: 400px;
   width: 100%;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-  text-align: center;
+  max-width: 600px;
+  box-shadow: 0 0 10px rgba(0,0,0,0.1);
+`;
+
+const MessageList = styled.div`
+  max-height: 300px;
+  overflow-y: auto;
+  margin-bottom: 1rem;
+  text-align: left;
+`;
+
+const MessageInput = styled.input`
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1px solid #ccc;
+  border-radius: 1rem;
+  font-size: 1rem;
+`;
+
+const StatusText = styled.p`
+  margin-top: 1rem;
+  font-weight: bold;
+  color: #4b5563;
 `;
 
 export default function Home() {
   const { data: session } = useSession();
-  const userId = session?.user?.email;
-
   const [origin, setOrigin] = useState("");
-  const [departure, setDeparture] = useState("");
-  const [budget, setBudget] = useState("");
-  const [dateRange, setDateRange] = useState([null, null]);
-  const [startDate, endDate] = dateRange;
   const [mood, setMood] = useState("");
   const [style, setStyle] = useState("");
-  const [isMatching, setIsMatching] = useState(false);
-  const [matchUser, setMatchUser] = useState(null);
-  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [matchResult, setMatchResult] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [message, setMessage] = useState("");
+  const [status, setStatus] = useState("");
+  const [isWaiting, setIsWaiting] = useState(false);
+  const messageEndRef = useRef(null);
 
-  const today = new Date();
-
-  const handleBudgetChange = (e) => {
-    const input = e.target.value.replace(/,/g, "").replace(/[^0-9]/g, "");
-    const formatted = input ? parseInt(input).toLocaleString() : "";
-    setBudget(formatted);
-  };
-
-  const handleRandomMatch = async () => {
-    if (!session) return setShowLoginModal(true);
-    if (!origin || !departure || !budget || !startDate || !endDate || !mood || !style) {
-      return alert("모든 항목을 작성해주세요");
+  const handleSubmit = async () => {
+    if (!session) return signIn();
+    if (!origin || !mood || !style) {
+      alert("모든 항목을 입력해주세요.");
+      return;
     }
-    setIsMatching(true);
+
+    setStatus("🔄 매칭 중입니다...");
+    setIsWaiting(true);
+
     try {
-      const response = await axios.post("/api/match", {
-        userId,
+      const res = await axios.post("/api/match", {
+        email: session.user.email,
+        name: session.user.name,
         origin,
-        departure,
-        budget: budget.replaceAll(",", ""),
         mood,
         style,
-        startDate,
-        endDate,
       });
-      if (response.data.matched) {
-        setMatchUser({ uid: response.data.partnerId, matchId: response.data.matchId });
-        alert("🎉 매칭이 성사되었습니다!");
+      setMatchResult(res.data);
+      if (
+        res.data.matched &&
+        res.data.match?.user1 &&
+        res.data.match?.user2 &&
+        res.data.match.origin &&
+        res.data.match.mood &&
+        res.data.match.style
+      ) {
+        setChatOpen(true);
+        setIsWaiting(false);
+        setStatus("✅ 매칭 성공! 채팅방이 열렸습니다.");
       } else {
-        alert("현재 매칭 대기 중인 유저가 없습니다");
+        setStatus("⏳ 대기열에 등록되었습니다. 상대를 기다리는 중...");
       }
     } catch (err) {
-      alert("서버 오류 발생");
+      setStatus("❌ 매칭 실패. 다시 시도해주세요.");
+      setIsWaiting(false);
+      console.error(err);
     }
-    setIsMatching(false);
   };
 
-  const renderLoginModal = () => (
-    <ModalBackdrop onClick={() => setShowLoginModal(false)}>
-      <ModalBox onClick={(e) => e.stopPropagation()}>
-        <h2>로그인 방법 선택</h2>
-        <Button onClick={() => signIn("google")}>Google로 로그인</Button>
-        <Button onClick={() => signIn("naver")} color="#03c75a" hover="#02b152">Naver로 로그인</Button>
-        <Button onClick={() => signIn("kakao")} color="#fee500" hover="#fada00" style={{ color: "#3c1e1e" }}>Kakao로 로그인</Button>
-        <Button onClick={() => setShowLoginModal(false)} color="#9ca3af">닫기</Button>
-      </ModalBox>
-    </ModalBackdrop>
-  );
+  const sendMessage = async () => {
+    if (!message.trim()) return;
+    const newMsg = { sender: session.user.name, text: message };
+
+    try {
+      await axios.post("/api/chat", {
+        matchId: matchResult.matchId,
+        sender: newMsg.sender,
+        text: newMsg.text,
+      });
+      setMessage("");
+    } catch (err) {
+      console.error("메시지 전송 실패:", err);
+    }
+  };
+
+  useEffect(() => {
+    messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  useEffect(() => {
+  if (!isWaiting || chatOpen || !session?.user?.email) return;
+
+  const interval = setInterval(async () => {
+    try {
+      const res = await axios.get(`/api/check-match?email=${session.user.email}`);
+      
+      // 🛡️ 이전 매칭 정보라도 내가 handleSubmit()을 눌렀을 때만 반응하도록
+      if (
+        isWaiting &&
+        res.data.matched &&
+        res.data.matchId &&
+        res.data.origin &&
+        res.data.mood &&
+        res.data.style
+      ) {
+        setChatOpen(true);
+        setMatchResult({ matchId: res.data.matchId, partnerName: res.data.partnerName });
+        setStatus("✅ 매칭 성공! 채팅방이 열렸습니다.");
+        setIsWaiting(false);
+      }
+    } catch (err) {
+      console.error("매칭 체크 실패:", err);
+    }
+  }, 5000);
+
+  return () => clearInterval(interval);
+}, [isWaiting, session?.user?.email, chatOpen]);
+
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      if (chatOpen && matchResult?.matchId) {
+        try {
+          const res = await axios.get(`/api/chat?matchId=${matchResult.matchId}`);
+          if (res.data && Array.isArray(res.data.messages)) {
+            setMessages(res.data.messages);
+          }
+        } catch (err) {
+          console.error("채팅 메시지 가져오기 실패:", err);
+        }
+      }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [chatOpen, matchResult?.matchId]);
 
   return (
     <Container>
       <Card>
         <AuthBox>
           {session ? (
-            <SubText>
-              👤 {session.user.name || session.user.email}
-              <button onClick={() => signOut()} style={{ marginLeft: "1rem", fontSize: "0.875rem", color: "#ef4444" }}>로그아웃</button>
-            </SubText>
+            <div>
+              👤 {session.user.name}
+              <button onClick={() => signOut()} style={{ marginLeft: "1rem", color: "#ef4444" }}>로그아웃</button>
+            </div>
           ) : (
-            <Button onClick={() => setShowLoginModal(true)} color="#111827" hover="#374151">로그인</Button>
+            <button onClick={() => signIn()} style={{ color: "#2563eb", fontWeight: "bold" }}>로그인</button>
           )}
         </AuthBox>
+
         <Title>랜덤 동행 감성 여행 만들기</Title>
 
-        {/* 입력폼들 생략 (위 내용과 동일) */}
+        <Input
+          type="text"
+          placeholder="출발지를 입력하세요"
+          value={origin}
+          onChange={(e) => setOrigin(e.target.value)}
+        />
 
-        <Button onClick={handleRandomMatch}>랜덤 매칭하기</Button>
+        <Select value={mood} onChange={(e) => setMood(e.target.value)}>
+          <option value="">감정을 선택하세요</option>
+          <option value="설렘">설렘</option>
+          <option value="힐링">힐링</option>
+          <option value="기분전환">기분전환</option>
+        </Select>
+
+        <Select value={style} onChange={(e) => setStyle(e.target.value)}>
+          <option value="">여행 스타일 선택</option>
+          <option value="즉흥형">즉흥형</option>
+          <option value="계획형">계획형</option>
+        </Select>
+
+        <Button onClick={handleSubmit}>랜덤 매칭하기</Button>
+        {status && <StatusText>{status}</StatusText>}
       </Card>
 
-      {matchUser && (
-        <div className="fixed bottom-24 right-6 w-80 h-96 bg-white rounded-xl shadow-xl p-4 z-40">
-          <h2 className="text-lg font-semibold mb-2">매칭된 유저와 채팅</h2>
-          <ChatBox matchId={matchUser.matchId} />
-        </div>
+      {chatOpen && (
+        <ChatBox>
+          <h3>🎉 매칭 완료! 채팅방이 열렸습니다.</h3>
+          <p>상대방: <strong>{matchResult?.partnerName || '상대방'}</strong></p>
+          <MessageList>
+            {messages.map((msg, idx) => (
+              <div key={idx}><strong>{msg.sender}:</strong> {msg.text}</div>
+            ))}
+            <div ref={messageEndRef} />
+          </MessageList>
+          <MessageInput
+            type="text"
+            value={message}
+            placeholder="메시지를 입력하세요"
+            onChange={(e) => setMessage(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+          />
+        </ChatBox>
       )}
-
-      {showLoginModal && renderLoginModal()}
     </Container>
   );
 }
