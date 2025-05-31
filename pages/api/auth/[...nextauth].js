@@ -2,12 +2,14 @@ import NextAuth from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import NaverProvider from "next-auth/providers/naver";
 import KakaoProvider from "next-auth/providers/kakao";
+import GitHubProvider from "next-auth/providers/github";
 import mongoose from "mongoose";
 import User from "@/models/User";
 
 async function connectToDB() {
-  if (mongoose.connections[0].readyState === 1) return;
-  await mongoose.connect(process.env.MONGODB_URI);
+  if (mongoose.connections[0].readyState !== 1) {
+    await mongoose.connect(process.env.MONGODB_URI);
+  }
 }
 
 export default NextAuth({
@@ -40,27 +42,16 @@ export default NextAuth({
         };
       },
     }),
+    GitHubProvider({
+      clientId: process.env.GITHUB_ID,
+      clientSecret: process.env.GITHUB_SECRET,
+    }),
   ],
   secret: process.env.NEXTAUTH_SECRET,
   session: {
     strategy: "jwt",
   },
-  cookies: {
-    sessionToken: {
-      name: `__Secure-next-auth.session-token`,
-      options: {
-        httpOnly: true,
-        sameSite: "lax",
-        path: "/",
-        secure: true, // ✅ 배포 환경에선 필수
-      },
-    },
-  },
   callbacks: {
-    async session({ session, token }) {
-      session.user.id = token.sub;
-      return session;
-    },
     async jwt({ token, account, profile }) {
       if (account && profile) {
         token.id = profile.id;
@@ -68,7 +59,6 @@ export default NextAuth({
         token.name = profile.name ?? `${account.provider} 사용자`;
         token.picture = profile.image ?? null;
 
-        // MongoDB에 사용자 저장
         await connectToDB();
         const existingUser = await User.findOne({ email: token.email });
         if (!existingUser) {
@@ -81,6 +71,13 @@ export default NextAuth({
         }
       }
       return token;
+    },
+    async session({ session, token }) {
+      session.user.id = token.sub;
+      session.user.email = token.email;
+      session.user.name = token.name;
+      session.user.image = token.picture;
+      return session;
     },
   },
 });
