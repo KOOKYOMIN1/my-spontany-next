@@ -132,19 +132,22 @@ export default function Home() {
       });
       setMatchResult(res.data);
       if (
-        res.data.matched &&
-        res.data.match?.user1 &&
-        res.data.match?.user2 &&
-        res.data.match.origin &&
-        res.data.match.mood &&
-        res.data.match.style
-      ) {
-        setChatOpen(true);
-        setIsWaiting(false);
-        setStatus("✅ 매칭 성공! 채팅방이 열렸습니다.");
-      } else {
-        setStatus("⏳ 대기열에 등록되었습니다. 상대를 기다리는 중...");
-      }
+  res.data.matched &&
+  res.data.matchId && // 핵심 ID
+  res.data.origin &&
+  res.data.mood &&
+  res.data.style
+) {
+  setChatOpen(true);
+  setMatchResult({
+    matchId: res.data.matchId,
+    partnerName: res.data.partnerName,
+  });
+  setIsWaiting(false);
+  setStatus("✅ 매칭 성공! 채팅방이 열렸습니다.");
+} else {
+  setStatus("⏳ 대기열에 등록되었습니다. 상대를 기다리는 중...");
+}
     } catch (err) {
       setStatus("❌ 매칭 실패. 다시 시도해주세요.");
       setIsWaiting(false);

@@ -11,16 +11,22 @@ export default async function handler(req, res) {
 
   const { db } = await connectToDatabase();
 
-  // 기존 대기중인 유저 찾기 (본인 제외)
-  const existing = await db.collection("matches").findOne({
-    user2: null,
-    user1: { $ne: email },
-  });
+  // 🎯 랜덤한 대기자 중 나와 다른 유저 찾기
+  const candidates = await db.collection("matches")
+    .find({
+      user2: null,
+      user1: { $ne: email },
+      user1Data: { $exists: true },
+    })
+    .toArray();
 
-  if (existing) {
-    // 기존 대기자와 매칭
+  const randomTarget = candidates.length > 0
+    ? candidates[Math.floor(Math.random() * candidates.length)]
+    : null;
+
+  if (randomTarget) {
     await db.collection("matches").updateOne(
-      { _id: existing._id },
+      { _id: randomTarget._id },
       {
         $set: {
           user2: email,
@@ -32,30 +38,30 @@ export default async function handler(req, res) {
     return res.status(200).json({
       matched: true,
       match: {
-        user1: existing.user1,
+        user1: randomTarget.user1,
         user2: email,
-        user1Data: existing.user1Data,
+        user1Data: randomTarget.user1Data,
         user2Data: { origin, mood, style },
       },
-      matchId: existing._id.toString(),
+      matchId: randomTarget._id.toString(),
     });
-  } else {
-    // 새로운 대기열 등록
-    const newMatch = await db.collection("matches").insertOne({
+  }
+
+  // 대기열에 내가 등록
+  const newMatch = await db.collection("matches").insertOne({
+    user1: email,
+    user2: null,
+    user1Data: { origin, mood, style },
+    user2Data: null,
+  });
+
+  return res.status(200).json({
+    matched: false,
+    match: {
       user1: email,
       user2: null,
       user1Data: { origin, mood, style },
-      user2Data: null,
-    });
-
-    return res.status(200).json({
-      matched: false,
-      match: {
-        user1: email,
-        user2: null,
-        user1Data: { origin, mood, style },
-      },
-      matchId: newMatch.insertedId.toString(),
-    });
-  }
+    },
+    matchId: newMatch.insertedId.toString(),
+  });
 }
