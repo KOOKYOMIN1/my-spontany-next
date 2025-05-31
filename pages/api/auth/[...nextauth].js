@@ -42,6 +42,20 @@ export default NextAuth({
     }),
   ],
   secret: process.env.NEXTAUTH_SECRET,
+  session: {
+    strategy: "jwt",
+  },
+  cookies: {
+    sessionToken: {
+      name: `__Secure-next-auth.session-token`,
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: true, // ✅ 배포 환경에선 필수
+      },
+    },
+  },
   callbacks: {
     async session({ session, token }) {
       session.user.id = token.sub;
@@ -54,7 +68,7 @@ export default NextAuth({
         token.name = profile.name ?? `${account.provider} 사용자`;
         token.picture = profile.image ?? null;
 
-        // MongoDB에 사용자 정보 저장
+        // MongoDB에 사용자 저장
         await connectToDB();
         const existingUser = await User.findOne({ email: token.email });
         if (!existingUser) {
