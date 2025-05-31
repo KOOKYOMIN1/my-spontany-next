@@ -1,4 +1,4 @@
-// ✅ index.js (양방향 채팅 메시지 반영 + 매칭 체크 + 작성란 입력 조건 반영 완성본)
+// ✅ index.js (채팅방 자동 열림 버그 수정 포함)
 import { useState, useEffect, useRef } from "react";
 import { useSession, signIn, signOut } from "next-auth/react";
 import styled from "styled-components";
@@ -75,7 +75,7 @@ const ChatBox = styled.div`
   background: white;
   width: 100%;
   max-width: 600px;
-  box-shadow: 0 0 10px rgba(0,0,0,0.1);
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
 `;
 
 const MessageList = styled.div`
@@ -112,42 +112,31 @@ export default function Home() {
   const [isWaiting, setIsWaiting] = useState(false);
   const messageEndRef = useRef(null);
 
-  const handleSubmit = async () => {
-    if (!session) return signIn();
-    if (!origin || !mood || !style) {
-      alert("모든 항목을 입력해주세요.");
-      return;
-    }
+ const handleSubmit = async () => {
+  if (!session) {
+    console.log("❌ 로그인 안 된 상태입니다");
+    return signIn();
+  }
 
-    setStatus("🔄 매칭 중입니다...");
-    setIsWaiting(true);
+  if (!origin || !mood || !style) {
+    alert("모든 항목을 입력해주세요.");
+    return;
+  }
+
+  console.log("🚀 handleSubmit 실행됨"); // ✅ 여기가 안 보이면 버튼 연결 문제
+
+  setStatus("🔄 매칭 중입니다...");
+  setIsWaiting(true);
 
     try {
-      const res = await axios.post("/api/match", {
+      await axios.post("/api/match", {
         email: session.user.email,
-        name: session.user.name,
         origin,
         mood,
         style,
       });
-      setMatchResult(res.data);
-      if (
-  res.data.matched &&
-  res.data.matchId && // 핵심 ID
-  res.data.origin &&
-  res.data.mood &&
-  res.data.style
-) {
-  setChatOpen(true);
-  setMatchResult({
-    matchId: res.data.matchId,
-    partnerName: res.data.partnerName,
-  });
-  setIsWaiting(false);
-  setStatus("✅ 매칭 성공! 채팅방이 열렸습니다.");
-} else {
-  setStatus("⏳ 대기열에 등록되었습니다. 상대를 기다리는 중...");
-}
+
+      setStatus("⏳ 대기열에 등록되었습니다. 상대를 기다리는 중...");
     } catch (err) {
       setStatus("❌ 매칭 실패. 다시 시도해주세요.");
       setIsWaiting(false);
@@ -160,7 +149,7 @@ export default function Home() {
     const newMsg = { sender: session.user.name, text: message };
 
     try {
-      await axios.post("/api/chat", {
+      await axios.post("/api/messages", {
         matchId: matchResult.matchId,
         sender: newMsg.sender,
         text: newMsg.text,
@@ -178,26 +167,33 @@ export default function Home() {
   useEffect(() => {
   if (!isWaiting || chatOpen || !session?.user?.email) return;
 
+  const userEmail = session.user.email;
+
   const interval = setInterval(async () => {
     try {
-      const res = await axios.get(`/api/check-match?email=${session.user.email}`);
-      
-      // 🛡️ 이전 매칭 정보라도 내가 handleSubmit()을 눌렀을 때만 반응하도록
+      const res = await axios.get(`/api/check-match?email=${encodeURIComponent(userEmail)}`);
+
+      console.log("🧪 check-match 응답:", res.data);
+
       if (
         isWaiting &&
         res.data.matched &&
         res.data.matchId &&
+        res.data.partnerName &&
         res.data.origin &&
         res.data.mood &&
         res.data.style
       ) {
         setChatOpen(true);
-        setMatchResult({ matchId: res.data.matchId, partnerName: res.data.partnerName });
+        setMatchResult({
+          matchId: res.data.matchId,
+          partnerName: res.data.partnerName,
+        });
         setStatus("✅ 매칭 성공! 채팅방이 열렸습니다.");
         setIsWaiting(false);
       }
     } catch (err) {
-      console.error("매칭 체크 실패:", err);
+      console.error("❌ check-match 호출 에러:", err);
     }
   }, 5000);
 
@@ -208,9 +204,9 @@ export default function Home() {
     const interval = setInterval(async () => {
       if (chatOpen && matchResult?.matchId) {
         try {
-          const res = await axios.get(`/api/chat?matchId=${matchResult.matchId}`);
-          if (res.data && Array.isArray(res.data.messages)) {
-            setMessages(res.data.messages);
+          const res = await axios.get(`/api/messages?matchId=${matchResult.matchId}`);
+          if (res.data && Array.isArray(res.data)) {
+            setMessages(res.data);
           }
         } catch (err) {
           console.error("채팅 메시지 가져오기 실패:", err);
