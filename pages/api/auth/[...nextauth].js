@@ -2,7 +2,6 @@ import NextAuth from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import NaverProvider from "next-auth/providers/naver";
 import KakaoProvider from "next-auth/providers/kakao";
-import GitHubProvider from "next-auth/providers/github";
 import mongoose from "mongoose";
 import User from "@/models/User";
 
@@ -42,10 +41,6 @@ export default NextAuth({
         };
       },
     }),
-    GitHubProvider({
-      clientId: process.env.GITHUB_ID,
-      clientSecret: process.env.GITHUB_SECRET,
-    }),
   ],
   secret: process.env.NEXTAUTH_SECRET,
   session: {
@@ -79,5 +74,9 @@ export default NextAuth({
       session.user.image = token.picture;
       return session;
     },
+  },
+  // 👉 커스텀 로그인 페이지 연결!
+  pages: {
+    signIn: "/auth/custom-signin",
   },
 });

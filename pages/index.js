@@ -1,280 +1,408 @@
-// ✅ index.js (채팅방 자동 열림 버그 수정 포함)
-import { useState, useEffect, useRef } from "react";
+import styled, { css } from "styled-components";
 import { useSession, signIn, signOut } from "next-auth/react";
-import styled from "styled-components";
-import axios from "axios";
+import { useRouter } from "next/router";
+import { useState, useRef } from "react";
+import { FaLock, FaBan } from "react-icons/fa";
 
-const Container = styled.div`
-  min-height: 100vh;
-  background: url("https://images.unsplash.com/photo-1503264116251-35a269479413?auto=format&fit=crop&w=1600&q=80") no-repeat center/cover;
+// 감정별 배경 이미지
+const MOOD_BG_MAP = {
+  기본: "https://images.unsplash.com/photo-1503264116251-35a269479413?auto=format&fit=crop&w=1600&q=80",
+  기분전환: "https://images.unsplash.com/photo-1747372236557-6a201063ab35?auto=format&fit=crop&w=1600&q=80",
+  힐링: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1600&q=80",
+  설렘: "/sakura.jpg", // public/sakura.jpg
+};
+
+const BgFade = styled.div`
+  position: fixed;
+  top: 0; left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: -1;
+  transition: opacity 0.7s;
+  background: ${({ bg }) => `url('${bg}') no-repeat center/cover`};
+  opacity: ${({ visible }) => (visible ? 1 : 0)};
+  pointer-events: none;
+`;
+
+const HeaderContainer = styled.header`
+  width: 100vw;
+  min-width: 350px;
+  height: 58px;
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0 0 0 2vw;
+  position: fixed;
+  top: 0; left: 0;
+  z-index: 200;
+  background: #fff;
+  border-bottom: 1px solid #f2f2f2;
+`;
+
+const Logo = styled.div`
+  font-size: 1.55rem;
+  font-weight: 700;
+  color: #222;
+  user-select: none;
+  cursor: pointer;
+  letter-spacing: -0.01em;
+`;
+
+const HeaderBtn = styled.button`
+  background: #fff;
+  color: #ff914d;
+  border: 2px solid #ff914d;
+  border-radius: 2rem;
+  padding: 0.53rem 2.1rem;
+  font-size: 1.10rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.14s, color 0.13s, border 0.13s;
+  position: fixed;
+  right: 2vw;
+  top: 12px;
+  z-index: 201;
+  box-shadow: none;
+  &:hover {
+    background: #ff914d;
+    color: #fff;
+    border-color: #ff914d;
+  }
+`;
+
+
+const CenterWrap = styled.div`
+  min-height: 100vh;
+  width: 100vw;
+  display: flex;
   align-items: center;
   justify-content: center;
-  padding: 2rem;
+  position: relative;
 `;
 
-const Card = styled.div`
-  width: 700px;
-  background: rgba(255, 255, 255, 0.9);
-  border-radius: 2rem;
-  padding: 2rem;
-  box-shadow: 0 0 30px rgba(0, 0, 0, 0.1);
+const FormBox = styled.div`
+  width: 100%;
+  max-width: 430px;
+  background: #fff;
+  border-radius: 1.2rem;
+  box-shadow: 0 2px 16px #c7b9b91c;
+  padding: 3.2rem 2rem 3.2rem 2rem;
   text-align: center;
+  position: relative;
+  box-sizing: border-box;
 `;
 
-const Title = styled.h1`
-  font-size: 1.8rem;
-  font-weight: bold;
-  color: #1f2937;
-  margin-bottom: 2rem;
+const Title = styled.h2`
+  font-size: 1.28rem;
+  font-weight: 700;
+  color: #222;
+  letter-spacing: -0.02em;
+  margin-bottom: 1.6rem;
+`;
+
+const MoodBtns = styled.div`
+  display: flex;
+  gap: 14px;
+  margin-bottom: 1.5rem;
+`;
+
+const MoodBtn = styled.button`
+  flex: 1 1 0;
+  border: 2px solid #eee;
+  background: #f8f8f8;
+  color: #777;
+  font-size: 1.12rem;
+  font-weight: 600;
+  border-radius: 0.92rem;
+  padding: 1.08rem 0;
+  cursor: pointer;
+  transition: border 0.13s, background 0.13s, color 0.13s;
+  ${({ active }) =>
+    active &&
+    css`
+      border: 2.3px solid #fc575e;
+      background: #fff4f0;
+      color: #fc575e;
+      font-weight: 700;
+    `}
+  &:hover {
+    border: 2.3px solid #fca86c;
+    background: #ffecd5;
+    color: #fc575e;
+  }
+  &:disabled {
+    cursor: not-allowed;
+    background: #f2f2f2;
+    color: #ccc;
+    border: 2px solid #f0f0f0;
+  }
+`;
+
+const InputGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  margin-bottom: 1rem;
+  width: 100%;
+`;
+
+const Label = styled.label`
+  margin: 0 0 0.28rem 0.1rem;
+  text-align: left;
+  font-size: 1.08rem;
+  font-weight: 600;
+  color: #333;
+  letter-spacing: -0.01em;
 `;
 
 const Input = styled.input`
   width: 100%;
-  padding: 0.75rem 1rem;
-  border: 1px solid #ccc;
-  border-radius: 1rem;
-  margin-bottom: 1rem;
-  font-size: 1rem;
-`;
-
-const Select = styled.select`
-  width: 100%;
-  padding: 0.75rem 1rem;
-  border: 1px solid #ccc;
-  border-radius: 1rem;
-  margin-bottom: 1rem;
-  font-size: 1rem;
-`;
-
-const Button = styled.button`
-  width: 100%;
-  background: #facc15;
-  border: none;
-  border-radius: 1rem;
-  padding: 1rem;
-  font-weight: bold;
+  padding: 1rem 1rem;
   font-size: 1.1rem;
-  cursor: pointer;
-  transition: 0.2s;
-  &:hover {
-    background: #eab308;
+  border: 1.5px solid #ececec;
+  border-radius: 0.85rem;
+  color: #222;
+  background: #f9f9f9;
+  box-sizing: border-box;
+  margin-bottom: 0;
+  transition: border 0.13s;
+  &:focus {
+    outline: none;
+    border-color: #fc575e;
+    background: #fff9f8;
+  }
+  &:disabled {
+    background: #f2f2f2;
+    color: #bbb;
+    cursor: not-allowed;
   }
 `;
 
-const AuthBox = styled.div`
-  text-align: right;
-  margin-bottom: 1rem;
-`;
-
-const ChatBox = styled.div`
-  margin-top: 2rem;
-  padding: 1rem;
-  border-radius: 1rem;
-  background: white;
+const PrimaryBtn = styled.button`
   width: 100%;
-  max-width: 600px;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  background: ${({ active }) =>
+    active
+      ? "linear-gradient(90deg, #ffb16c, #fc575e)"
+      : "#eee"};
+  color: ${({ active }) => (active ? "white" : "#bbb")};
+  border: none;
+  border-radius: 0.95rem;
+  font-size: 1.21rem;
+  font-weight: 700;
+  padding: 1.24rem 0;
+  margin: 1.3rem 0 0.5rem 0;
+  cursor: ${({ active }) => (active ? "pointer" : "not-allowed")};
+  transition: background 0.15s, color 0.11s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  box-shadow: ${({ active }) =>
+    active
+      ? "0 1.5px 12px #fc575e19"
+      : "none"};
+  &:hover {
+    background: ${({ active }) =>
+      active
+        ? "linear-gradient(90deg, #fc575e, #ffb16c)"
+        : "#eee"};
+  }
 `;
 
-const MessageList = styled.div`
-  max-height: 300px;
-  overflow-y: auto;
-  margin-bottom: 1rem;
-  text-align: left;
+const DisabledBtn = styled(PrimaryBtn)`
+  background: #eee !important;
+  color: #bbb !important;
+  cursor: not-allowed;
+  &:hover {
+    background: #eee !important;
+  }
 `;
 
-const MessageInput = styled.input`
-  width: 100%;
-  padding: 0.75rem 1rem;
-  border: 1px solid #ccc;
-  border-radius: 1rem;
-  font-size: 1rem;
+const PremiumBtn = styled(PrimaryBtn)`
+  background: #e6e6e6 !important;
+  color: #858585 !important;
+  margin-top: 0.55rem;
+  border: 1.6px solid #e2e2e2;
+  svg {
+    margin-right: 8px;
+    font-size: 1.13em;
+    vertical-align: middle;
+  }
 `;
 
-const StatusText = styled.p`
-  margin-top: 1rem;
-  font-weight: bold;
-  color: #4b5563;
+const Notice = styled.div`
+  color: #fa5757;
+  font-size: 1.07rem;
+  margin-top: 0.55rem;
+  font-weight: 600;
+  min-height: 1.4em;
+  letter-spacing: -0.01em;
+  text-align: center;
+`;
+
+const Overlay = styled.div`
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  width: 100%; height: 100%;
+  z-index: 10;
+  cursor: not-allowed;
 `;
 
 export default function Home() {
   const { data: session } = useSession();
-  const [origin, setOrigin] = useState("");
+  const router = useRouter();
+
+  const isPremium = false;
   const [mood, setMood] = useState("");
-  const [style, setStyle] = useState("");
-  const [chatOpen, setChatOpen] = useState(false);
-  const [matchResult, setMatchResult] = useState(null);
-  const [messages, setMessages] = useState([]);
-  const [message, setMessage] = useState("");
-  const [status, setStatus] = useState("");
-  const [isWaiting, setIsWaiting] = useState(false);
-  const messageEndRef = useRef(null);
+  const [origin, setOrigin] = useState("");
+  const [budget, setBudget] = useState("");
+  const [notice, setNotice] = useState("");
+  const noticeTimeout = useRef();
+  const [bgMood, setBgMood] = useState("기본");
 
- const handleSubmit = async () => {
-  if (!session) {
-    console.log("❌ 로그인 안 된 상태입니다");
-    return signIn();
-  }
-
-  if (!origin || !mood || !style) {
-    alert("모든 항목을 입력해주세요.");
-    return;
-  }
-
-  console.log("🚀 handleSubmit 실행됨"); // ✅ 여기가 안 보이면 버튼 연결 문제
-
-  setStatus("🔄 매칭 중입니다...");
-  setIsWaiting(true);
-
-    try {
-      await axios.post("/api/match", {
-        email: session.user.email,
-        origin,
-        mood,
-        style,
-      });
-
-      setStatus("⏳ 대기열에 등록되었습니다. 상대를 기다리는 중...");
-    } catch (err) {
-      setStatus("❌ 매칭 실패. 다시 시도해주세요.");
-      setIsWaiting(false);
-      console.error(err);
+  const handleBudgetChange = (e) => {
+    let val = e.target.value.replace(/[^0-9]/g, "");
+    if (!val) {
+      setBudget("");
+      return;
     }
+    setBudget(parseInt(val, 10).toLocaleString());
   };
 
-  const sendMessage = async () => {
-    if (!message.trim()) return;
-    const newMsg = { sender: session.user.name, text: message };
-
-    try {
-      await axios.post("/api/messages", {
-        matchId: matchResult.matchId,
-        sender: newMsg.sender,
-        text: newMsg.text,
-      });
-      setMessage("");
-    } catch (err) {
-      console.error("메시지 전송 실패:", err);
-    }
+  const handleLoginPopup = () => {
+    const width = 430;
+    const height = 520;
+    const left = window.screenX + (window.outerWidth - width) / 2;
+    const top = window.screenY + (window.outerHeight - height) / 2;
+    window.open(
+      "/api/auth/signin",
+      "SpontanyLogin",
+      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+    );
   };
 
-  useEffect(() => {
-    messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  const showLoginNotice = () => {
+    if (noticeTimeout.current) clearTimeout(noticeTimeout.current);
+    setNotice("로그인 후 이용 가능합니다");
+    noticeTimeout.current = setTimeout(() => setNotice(""), 1500);
+  };
 
-  useEffect(() => {
-  if (!isWaiting || chatOpen || !session?.user?.email) return;
+  const showInputNotice = () => {
+    if (noticeTimeout.current) clearTimeout(noticeTimeout.current);
+    setNotice("작성란을 입력해주세요");
+    noticeTimeout.current = setTimeout(() => setNotice(""), 1500);
+  };
 
-  const userEmail = session.user.email;
+  const handleOverlayClick = (e) => {
+    e.stopPropagation();
+    showLoginNotice();
+  };
 
-  const interval = setInterval(async () => {
-    try {
-      const res = await axios.get(`/api/check-match?email=${encodeURIComponent(userEmail)}`);
+  const recommendActive = !!(session && mood && origin && budget);
 
-      console.log("🧪 check-match 응답:", res.data);
-
-      if (
-        isWaiting &&
-        res.data.matched &&
-        res.data.matchId &&
-        res.data.partnerName &&
-        res.data.origin &&
-        res.data.mood &&
-        res.data.style
-      ) {
-        setChatOpen(true);
-        setMatchResult({
-          matchId: res.data.matchId,
-          partnerName: res.data.partnerName,
-        });
-        setStatus("✅ 매칭 성공! 채팅방이 열렸습니다.");
-        setIsWaiting(false);
-      }
-    } catch (err) {
-      console.error("❌ check-match 호출 에러:", err);
-    }
-  }, 5000);
-
-  return () => clearInterval(interval);
-}, [isWaiting, session?.user?.email, chatOpen]);
-
-  useEffect(() => {
-    const interval = setInterval(async () => {
-      if (chatOpen && matchResult?.matchId) {
-        try {
-          const res = await axios.get(`/api/messages?matchId=${matchResult.matchId}`);
-          if (res.data && Array.isArray(res.data)) {
-            setMessages(res.data);
-          }
-        } catch (err) {
-          console.error("채팅 메시지 가져오기 실패:", err);
-        }
-      }
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [chatOpen, matchResult?.matchId]);
+  const handleMoodClick = (newMood) => {
+    setMood(newMood);
+    setBgMood(newMood);
+  };
 
   return (
-    <Container>
-      <Card>
-        <AuthBox>
-          {session ? (
-            <div>
-              👤 {session.user.name}
-              <button onClick={() => signOut()} style={{ marginLeft: "1rem", color: "#ef4444" }}>로그아웃</button>
-            </div>
+    <>
+      {Object.entries(MOOD_BG_MAP).map(([key, url]) => (
+        <BgFade key={key} bg={url} visible={bgMood === key} />
+      ))}
+      <HeaderContainer>
+        <Logo onClick={() => router.push("/")}>Spontany</Logo>
+      </HeaderContainer>
+      {!session && <HeaderBtn onClick={handleLoginPopup}>로그인</HeaderBtn>}
+      {session && <HeaderBtn onClick={() => signOut()}>로그아웃</HeaderBtn>}
+      <CenterWrap>
+        <FormBox>
+          <Title>
+            오늘의 감정을 선택하고
+            <br />
+            여행지 추천을 받아보세요
+          </Title>
+          <MoodBtns>
+            <MoodBtn
+              onClick={session ? () => handleMoodClick("설렘") : undefined}
+              disabled={!session}
+              active={mood === "설렘"}
+            >
+              설렘
+            </MoodBtn>
+            <MoodBtn
+              onClick={session ? () => handleMoodClick("힐링") : undefined}
+              disabled={!session}
+              active={mood === "힐링"}
+            >
+              힐링
+            </MoodBtn>
+            <MoodBtn
+              onClick={session ? () => handleMoodClick("기분전환") : undefined}
+              disabled={!session}
+              active={mood === "기분전환"}
+            >
+              기분전환
+            </MoodBtn>
+          </MoodBtns>
+          <InputGroup>
+            <Label htmlFor="origin">출발지</Label>
+            <Input
+              id="origin"
+              type="text"
+              placeholder=""
+              value={origin}
+              onChange={session ? (e) => setOrigin(e.target.value) : undefined}
+              disabled={!session}
+              onClick={!session ? showLoginNotice : undefined}
+            />
+          </InputGroup>
+          <InputGroup>
+            <Label htmlFor="budget">예산</Label>
+            <Input
+              id="budget"
+              type="text"
+              placeholder="예: 10,000"
+              value={budget}
+              onChange={session ? handleBudgetChange : undefined}
+              inputMode="numeric"
+              maxLength={11}
+              disabled={!session}
+              onClick={!session ? showLoginNotice : undefined}
+            />
+          </InputGroup>
+          <PrimaryBtn
+            onClick={() => {
+              if (!session) return;
+              if (!mood || !origin || !budget) return showInputNotice();
+              alert("여행지 추천 기능!");
+            }}
+            disabled={!session}
+            active={session}
+          >
+            여행지 추천 받기
+          </PrimaryBtn>
+          {isPremium ? (
+            <PrimaryBtn
+              onClick={() => alert("랜덤 매칭!")}
+              active={true}
+            >
+              랜덤 매칭하기
+            </PrimaryBtn>
           ) : (
-            <button onClick={() => signIn()} style={{ color: "#2563eb", fontWeight: "bold" }}>로그인</button>
+            <DisabledBtn>
+              <FaBan style={{ marginRight: 8, fontSize: "1.12em" }} />
+              랜덤 매칭하기
+            </DisabledBtn>
           )}
-        </AuthBox>
-
-        <Title>랜덤 동행 감성 여행 만들기</Title>
-
-        <Input
-          type="text"
-          placeholder="출발지를 입력하세요"
-          value={origin}
-          onChange={(e) => setOrigin(e.target.value)}
-        />
-
-        <Select value={mood} onChange={(e) => setMood(e.target.value)}>
-          <option value="">감정을 선택하세요</option>
-          <option value="설렘">설렘</option>
-          <option value="힐링">힐링</option>
-          <option value="기분전환">기분전환</option>
-        </Select>
-
-        <Select value={style} onChange={(e) => setStyle(e.target.value)}>
-          <option value="">여행 스타일 선택</option>
-          <option value="즉흥형">즉흥형</option>
-          <option value="계획형">계획형</option>
-        </Select>
-
-        <Button onClick={handleSubmit}>랜덤 매칭하기</Button>
-        {status && <StatusText>{status}</StatusText>}
-      </Card>
-
-      {chatOpen && (
-        <ChatBox>
-          <h3>🎉 매칭 완료! 채팅방이 열렸습니다.</h3>
-          <p>상대방: <strong>{matchResult?.partnerName || '상대방'}</strong></p>
-          <MessageList>
-            {messages.map((msg, idx) => (
-              <div key={idx}><strong>{msg.sender}:</strong> {msg.text}</div>
-            ))}
-            <div ref={messageEndRef} />
-          </MessageList>
-          <MessageInput
-            type="text"
-            value={message}
-            placeholder="메시지를 입력하세요"
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-          />
-        </ChatBox>
-      )}
-    </Container>
+          <PremiumBtn onClick={() => alert("프리미엄으로 전환")}>
+            <FaLock />
+            프리미엄으로 전환하고 매칭 시작하기
+          </PremiumBtn>
+          <Notice>{notice}</Notice>
+          {!session && <Overlay onClick={handleOverlayClick} />}
+        </FormBox>
+      </CenterWrap>
+    </>
   );
 }
