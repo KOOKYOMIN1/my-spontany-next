@@ -32,5 +32,5 @@
 ---
 
 **Contact**  
-- Email: your-email@example.com  
+- Email: pgold97488@gmail.com  
 - GitHub: [KOOKYOMIN1](https://github.com/KOOKYOMIN1)
