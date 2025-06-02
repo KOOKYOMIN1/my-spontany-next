@@ -1,13 +1,12 @@
 // pages/api/match.js
 import { connectToDatabase } from "@/lib/db";
-import { ObjectId } from "mongodb";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();
-  const { email, mood, origin, style } = req.body;
+  const { email } = req.body;
   const { db } = await connectToDatabase();
 
-  // 1. 내가 user1/user2로 이미 들어간 대기중 방이 있으면 재입장 방지
+  // 1. 내가 user1/user2로 이미 들어간 대기중 방이 있으면 그대로 리턴
   let myPending = await db.collection("matches").findOne({
     $or: [{ user1: email }, { user2: email }],
     matched: false,
@@ -19,7 +18,7 @@ export default async function handler(req, res) {
     });
   }
 
-  // 2. 다른 사람이 만든 대기중 방에 들어가기
+  // 2. user2가 없는 대기방 있으면 무조건 붙이기 (조건무시)
   let match = await db.collection("matches").findOne({
     user2: null,
     matched: false,
@@ -42,7 +41,6 @@ export default async function handler(req, res) {
     user1: email,
     user2: null,
     matched: false,
-    mood, origin, style,
     createdAt: new Date(),
   });
   return res.status(200).json({

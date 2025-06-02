@@ -1,23 +1,77 @@
-// socket-server/server.js
 const { Server } = require("socket.io");
+const http = require("http");
+const cors = require("cors");
+const express = require("express");
 
-const io = new Server(3001, {
-  cors: { origin: "http://localhost:3000", methods: ["GET", "POST"] },
+const app = express();
+app.use(cors());
+
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"],
+  },
 });
+
+let chatRooms = {};      // { matchId: [ {sender, text, time}, ... ] }
+let roomUsers = {};      // { matchId: Set(socket.id, ...) }
 
 io.on("connection", (socket) => {
-  socket.on("join", ({ matchId }) => {
+  socket.on("joinRoom", ({ matchId }) => {
     socket.join(matchId);
+
+    // 방 입장자 관리
+    if (!roomUsers[matchId]) roomUsers[matchId] = new Set();
+    roomUsers[matchId].add(socket.id);
+
+    // 기존 메시지 송신
+    socket.emit("chatHistory", chatRooms[matchId] || []);
+
+    // 파트너 동시 접속 확인
+    if (roomUsers[matchId].size >= 2) {
+      io.to(matchId).emit("partner-joined");
+    }
   });
 
-  socket.on("leave", ({ matchId, email }) => {
+  socket.on("leaveRoom", ({ matchId }) => {
     socket.leave(matchId);
-    socket.to(matchId).emit("partner-left", { email });
+    if (roomUsers[matchId]) {
+      roomUsers[matchId].delete(socket.id);
+      // 한 명 이하 남았으면 "partner-left" 알림
+      if (roomUsers[matchId].size < 2) {
+        io.to(matchId).emit("partner-left");
+      }
+      // 아무도 없으면 정리
+      if (roomUsers[matchId].size === 0) {
+        delete roomUsers[matchId];
+      }
+    }
   });
 
-  socket.on("message", (msg) => {
-    io.to(msg.matchId).emit("message", msg);
+  socket.on("sendMessage", ({ matchId, sender, text, time }) => {
+    if (!chatRooms[matchId]) chatRooms[matchId] = [];
+    const msg = { sender, text, time };
+    chatRooms[matchId].push(msg);
+    io.to(matchId).emit("receiveMessage", msg);
+  });
+
+  // 연결 종료시 자동 leaveRoom 처리
+  socket.on("disconnect", () => {
+    for (const matchId in roomUsers) {
+      if (roomUsers[matchId].has(socket.id)) {
+        roomUsers[matchId].delete(socket.id);
+        if (roomUsers[matchId].size < 2) {
+          io.to(matchId).emit("partner-left");
+        }
+        if (roomUsers[matchId].size === 0) {
+          delete roomUsers[matchId];
+        }
+      }
+    }
   });
 });
 
-console.log("Socket.io 서버가 3001포트에서 실행중");
+server.listen(3001, () => {
+  console.log("Socket.io server on 3001");
+});
