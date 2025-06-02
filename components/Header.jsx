@@ -37,6 +37,20 @@ const RightBox = styled.div`
   margin-left: auto;
 `;
 
+const AccountBox = styled.div`
+  font-size: 1.01rem;
+  font-weight: 600;
+  color: #5b3b20;
+  background: #fbeee6;
+  border-radius: 1em;
+  padding: 0.45em 1.2em;
+  margin-right: 8px;
+  max-width: 180px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`;
+
 const Button = styled.button`
   background: linear-gradient(90deg, #f7b42c, #fc575e);
   color: white;
@@ -56,7 +70,7 @@ const Button = styled.button`
 `;
 
 export default function Header() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const router = useRouter();
 
   // 로그인 팝업(진짜 새창) 열기
@@ -72,13 +86,35 @@ export default function Header() {
     );
   };
 
+  // 이름, 닉네임, 이메일 중 1순위로 표시
+  let userLabel = "";
+  if (status === "loading") {
+    userLabel = "로딩 중...";
+  } else if (session?.user) {
+    userLabel =
+      session.user.name ||
+      session.user.nickname ||
+      (session.user.email ? session.user.email.split("@")[0] : "");
+  }
+
   return (
     <HeaderContainer>
       <Logo onClick={() => router.push("/")}>
         Spontany
       </Logo>
       <RightBox>
-        {!session && <Button onClick={handleLoginPopup}>로그인</Button>}
+        {/* 세션 상태가 로딩 중이면 회색 로딩 표시 */}
+        {status === "loading" && (
+          <AccountBox style={{ background: "#eee", color: "#bbb" }}>
+            로딩 중...
+          </AccountBox>
+        )}
+        {/* 로그인 후 닉네임/이메일 표시 */}
+        {session && status !== "loading" && (
+          <AccountBox title={userLabel}>{userLabel}</AccountBox>
+        )}
+        {/* 로그인/로그아웃 버튼 */}
+        {!session && status !== "loading" && <Button onClick={handleLoginPopup}>로그인</Button>}
         {session && <Button onClick={() => signOut()}>로그아웃</Button>}
       </RightBox>
     </HeaderContainer>

@@ -5,6 +5,7 @@ import KakaoProvider from "next-auth/providers/kakao";
 import mongoose from "mongoose";
 import User from "@/models/User";
 
+// DB 연결 함수
 async function connectToDB() {
   if (mongoose.connections[0].readyState !== 1) {
     await mongoose.connect(process.env.MONGODB_URI);
@@ -21,9 +22,10 @@ export default NextAuth({
       clientId: process.env.NAVER_CLIENT_ID,
       clientSecret: process.env.NAVER_CLIENT_SECRET,
       profile(profile) {
+        // nickname > name > "네이버 사용자"
         return {
           id: profile.response.id,
-          name: profile.response.name ?? "네이버 사용자",
+          name: profile.response.nickname || profile.response.name || "네이버 사용자",
           email: profile.response.email ?? `${profile.response.id}@naver.com`,
           image: profile.response.profile_image ?? null,
         };
@@ -33,9 +35,14 @@ export default NextAuth({
       clientId: process.env.KAKAO_CLIENT_ID,
       clientSecret: process.env.KAKAO_CLIENT_SECRET,
       profile(profile) {
+        // nickname > "카카오 사용자"
         return {
           id: profile.id.toString(),
-          name: profile.kakao_account?.profile?.nickname ?? "카카오 사용자",
+          name:
+            (profile.kakao_account &&
+              profile.kakao_account.profile &&
+              profile.kakao_account.profile.nickname) ||
+            "카카오 사용자",
           email: profile.kakao_account?.email ?? `${profile.id}@kakao.com`,
           image: profile.kakao_account?.profile?.profile_image_url ?? null,
         };
@@ -54,6 +61,7 @@ export default NextAuth({
         token.name = profile.name ?? `${account.provider} 사용자`;
         token.picture = profile.image ?? null;
 
+        // DB 유저 생성/갱신
         await connectToDB();
         const existingUser = await User.findOne({ email: token.email });
         if (!existingUser) {
@@ -75,7 +83,6 @@ export default NextAuth({
       return session;
     },
   },
-  // 👉 커스텀 로그인 페이지 연결!
   pages: {
     signIn: "/auth/custom-signin",
   },

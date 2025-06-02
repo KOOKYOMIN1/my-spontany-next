@@ -1,5 +1,6 @@
+// /pages/index.js
 import styled, { css } from "styled-components";
-import { useSession, signIn, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/router";
 import { useState, useRef } from "react";
 import { FaLock, FaBan } from "react-icons/fa";
@@ -19,57 +20,10 @@ const BgFade = styled.div`
   height: 100vh;
   z-index: -1;
   transition: opacity 0.7s;
-  background: ${({ bg }) => `url('${bg}') no-repeat center/cover`};
-  opacity: ${({ visible }) => (visible ? 1 : 0)};
+  background: ${({ $bg }) => `url('${$bg}') no-repeat center/cover`};
+  opacity: ${({ $visible }) => ($visible ? 1 : 0)};
   pointer-events: none;
 `;
-
-const HeaderContainer = styled.header`
-  width: 100vw;
-  min-width: 350px;
-  height: 58px;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  padding: 0 0 0 2vw;
-  position: fixed;
-  top: 0; left: 0;
-  z-index: 200;
-  background: #fff;
-  border-bottom: 1px solid #f2f2f2;
-`;
-
-const Logo = styled.div`
-  font-size: 1.55rem;
-  font-weight: 700;
-  color: #222;
-  user-select: none;
-  cursor: pointer;
-  letter-spacing: -0.01em;
-`;
-
-const HeaderBtn = styled.button`
-  background: #fff;
-  color: #ff914d;
-  border: 2px solid #ff914d;
-  border-radius: 2rem;
-  padding: 0.53rem 2.1rem;
-  font-size: 1.10rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background 0.14s, color 0.13s, border 0.13s;
-  position: fixed;
-  right: 2vw;
-  top: 12px;
-  z-index: 201;
-  box-shadow: none;
-  &:hover {
-    background: #ff914d;
-    color: #fff;
-    border-color: #ff914d;
-  }
-`;
-
 
 const CenterWrap = styled.div`
   min-height: 100vh;
@@ -117,8 +71,8 @@ const MoodBtn = styled.button`
   padding: 1.08rem 0;
   cursor: pointer;
   transition: border 0.13s, background 0.13s, color 0.13s;
-  ${({ active }) =>
-    active &&
+  ${({ $active }) =>
+    $active &&
     css`
       border: 2.3px solid #fc575e;
       background: #fff4f0;
@@ -180,30 +134,30 @@ const Input = styled.input`
 
 const PrimaryBtn = styled.button`
   width: 100%;
-  background: ${({ active }) =>
-    active
+  background: ${({ $active }) =>
+    $active
       ? "linear-gradient(90deg, #ffb16c, #fc575e)"
       : "#eee"};
-  color: ${({ active }) => (active ? "white" : "#bbb")};
+  color: ${({ $active }) => ($active ? "white" : "#bbb")};
   border: none;
   border-radius: 0.95rem;
   font-size: 1.21rem;
   font-weight: 700;
   padding: 1.24rem 0;
   margin: 1.3rem 0 0.5rem 0;
-  cursor: ${({ active }) => (active ? "pointer" : "not-allowed")};
+  cursor: ${({ $active }) => ($active ? "pointer" : "not-allowed")};
   transition: background 0.15s, color 0.11s;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
-  box-shadow: ${({ active }) =>
-    active
+  box-shadow: ${({ $active }) =>
+    $active
       ? "0 1.5px 12px #fc575e19"
       : "none"};
   &:hover {
-    background: ${({ active }) =>
-      active
+    background: ${({ $active }) =>
+      $active
         ? "linear-gradient(90deg, #fc575e, #ffb16c)"
         : "#eee"};
   }
@@ -248,11 +202,18 @@ const Overlay = styled.div`
   cursor: not-allowed;
 `;
 
+// 2글자 이상 + 숫자 불가 (공백만 입력 방지)
+function isValidOrigin(origin) {
+  if (typeof origin !== "string") return false;
+  const cleaned = origin.replace(/\s/g, "");
+  return cleaned.length >= 2;
+}
+
 export default function Home() {
   const { data: session } = useSession();
   const router = useRouter();
 
-  const isPremium = false;
+  const isPremium = false; // 실제 프리미엄 권한 연동 필요시 로직 변경
   const [mood, setMood] = useState("");
   const [origin, setOrigin] = useState("");
   const [budget, setBudget] = useState("");
@@ -269,17 +230,13 @@ export default function Home() {
     setBudget(parseInt(val, 10).toLocaleString());
   };
 
-  const handleLoginPopup = () => {
-    const width = 430;
-    const height = 520;
-    const left = window.screenX + (window.outerWidth - width) / 2;
-    const top = window.screenY + (window.outerHeight - height) / 2;
-    window.open(
-      "/api/auth/signin",
-      "SpontanyLogin",
-      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
-    );
-  };
+  const handleOriginChange = session
+    ? (e) => {
+        // 숫자 제거
+        const onlyText = e.target.value.replace(/[0-9]/g, "");
+        setOrigin(onlyText);
+      }
+    : undefined;
 
   const showLoginNotice = () => {
     if (noticeTimeout.current) clearTimeout(noticeTimeout.current);
@@ -307,14 +264,10 @@ export default function Home() {
 
   return (
     <>
+      {/* 감정별 배경 */}
       {Object.entries(MOOD_BG_MAP).map(([key, url]) => (
-        <BgFade key={key} bg={url} visible={bgMood === key} />
+        <BgFade key={key} $bg={url} $visible={bgMood === key} />
       ))}
-      <HeaderContainer>
-        <Logo onClick={() => router.push("/")}>Spontany</Logo>
-      </HeaderContainer>
-      {!session && <HeaderBtn onClick={handleLoginPopup}>로그인</HeaderBtn>}
-      {session && <HeaderBtn onClick={() => signOut()}>로그아웃</HeaderBtn>}
       <CenterWrap>
         <FormBox>
           <Title>
@@ -326,21 +279,21 @@ export default function Home() {
             <MoodBtn
               onClick={session ? () => handleMoodClick("설렘") : undefined}
               disabled={!session}
-              active={mood === "설렘"}
+              $active={mood === "설렘"}
             >
               설렘
             </MoodBtn>
             <MoodBtn
               onClick={session ? () => handleMoodClick("힐링") : undefined}
               disabled={!session}
-              active={mood === "힐링"}
+              $active={mood === "힐링"}
             >
               힐링
             </MoodBtn>
             <MoodBtn
               onClick={session ? () => handleMoodClick("기분전환") : undefined}
               disabled={!session}
-              active={mood === "기분전환"}
+              $active={mood === "기분전환"}
             >
               기분전환
             </MoodBtn>
@@ -350,11 +303,14 @@ export default function Home() {
             <Input
               id="origin"
               type="text"
-              placeholder=""
+              placeholder="예: 서울, 부산, 제주"
               value={origin}
-              onChange={session ? (e) => setOrigin(e.target.value) : undefined}
+              onChange={handleOriginChange}
               disabled={!session}
               onClick={!session ? showLoginNotice : undefined}
+              pattern="^[^0-9]*$"
+              inputMode="text"
+              autoComplete="off"
             />
           </InputGroup>
           <InputGroup>
@@ -362,7 +318,7 @@ export default function Home() {
             <Input
               id="budget"
               type="text"
-              placeholder="예: 10,000"
+              placeholder="예산 금액 (원)"
               value={budget}
               onChange={session ? handleBudgetChange : undefined}
               inputMode="numeric"
@@ -375,17 +331,26 @@ export default function Home() {
             onClick={() => {
               if (!session) return;
               if (!mood || !origin || !budget) return showInputNotice();
-              alert("여행지 추천 기능!");
+              if (!isValidOrigin(origin)) {
+                setNotice("출발지는 2글자 이상 입력해주세요");
+                if (noticeTimeout.current) clearTimeout(noticeTimeout.current);
+                noticeTimeout.current = setTimeout(() => setNotice(""), 1500);
+                return;
+              }
+              router.push({
+                pathname: "/result",
+                query: { departure: origin, budget, mood },
+              });
             }}
             disabled={!session}
-            active={session}
+            $active={session}
           >
             여행지 추천 받기
           </PrimaryBtn>
           {isPremium ? (
             <PrimaryBtn
               onClick={() => alert("랜덤 매칭!")}
-              active={true}
+              $active={true}
             >
               랜덤 매칭하기
             </PrimaryBtn>
