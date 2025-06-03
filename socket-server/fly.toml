@@ -1,3 +1,5 @@
+app = "spontany-socket"
+
 [deploy]
   strategy = "immediate"
 
@@ -26,3 +28,6 @@
     timeout = "2s"
     grace_period = "5s"
     restart_limit = 0
+
+[scale]
+  count = 1
