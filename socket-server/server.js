@@ -1,16 +1,20 @@
 const { Server } = require("socket.io");
 const http = require("http");
-const cors = require("cors");
 const express = require("express");
 
 const app = express();
-app.use(cors());
+
+const allowedOrigins = [
+  "https://my-spontany-next.vercel.app", // Vercel 배포 주소
+  "http://localhost:3000"                // 로컬 개발 주소
+];
 
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin: allowedOrigins,
     methods: ["GET", "POST"],
+    credentials: true,
   },
 });
 
