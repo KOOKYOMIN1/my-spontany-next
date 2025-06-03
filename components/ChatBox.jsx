@@ -16,6 +16,7 @@ export default function ChatBox({ matchId, myName }) {
 
   useEffect(() => {
     if (!matchId) return;
+    console.log(`[ChatBox mount] matchId: ${matchId}`);
 
     socket.emit("joinRoom", { matchId });
 
