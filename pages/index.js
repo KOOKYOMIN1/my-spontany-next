@@ -7,6 +7,7 @@ import ChatBox from "@/components/ChatBox";
 import useIsPremium from "@/hooks/useIsPremium";
 import { useChatModal } from "@/contexts/ChatModalContext"; // 추가
 import { io } from "socket.io-client";
+import socket from "../utils/socket";
 
 // 전역 애니메이션 스타일 추가 (styled-components 사용 시)
 const GlobalStyle = createGlobalStyle`
@@ -235,8 +236,6 @@ function isValidOrigin(origin) {
   return cleaned.length >= 2;
 }
 
-// 예시: 소켓 서버가 3001번 포트에서 실행 중일 때
-const socket = io("https://spontany-socket.fly.dev");
 
 export default function Home() {
   const { data: session } = useSession();

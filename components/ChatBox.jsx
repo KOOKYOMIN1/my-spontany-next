@@ -1,11 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { io } from "socket.io-client";
+import socket from "../utils/socket";
 
-// 배포 서버에 맞게 주소/프로토콜 통일
-const socket = io("https://spontany-socket.fly.dev", {
-  transports: ["websocket"], // 필요시 추가
-  // withCredentials: true, // 서버가 credentials 요구하면
-});
 
 // 시간 포맷 (ex. 15:12 → 오후 3:12)
 function formatTime(ts) {
