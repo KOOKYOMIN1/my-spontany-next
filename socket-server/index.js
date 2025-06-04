@@ -1,6 +1,7 @@
 const { Server } = require("socket.io");
 const http = require("http");
 const express = require("express");
+const { v4: uuidv4 } = require("uuid"); // UUID 생성기 추가
 
 const app = express();
 
@@ -22,6 +23,8 @@ const io = new Server(server, {
 let chatRooms = {};   // { matchId: [ {sender, text, time}, ... ] }
 let roomUsers = {};   // { matchId: Set(socket.id, ...) }
 let pendingDisconnects = {}; // { matchId_socketId: timeoutId }
+let waitingUser = null; // 전역에 추가
+let waitingQueue = []; // 대기열 추가
 
 io.on("connection", (socket) => {
   console.log(`[connect] socketId: ${socket.id}`);
@@ -109,8 +112,48 @@ io.on("connection", (socket) => {
       }
     }
   });
-});
 
+  // 매칭 대기 큐 진입
+  socket.on("joinMatchQueue", (userInfo) => {
+    if (!waitingQueue.find(u => u.userId === userInfo.userId)) {
+      waitingQueue.push({ ...userInfo, socketId: socket.id });
+      console.log("[서버] 큐 진입:", userInfo.userId, waitingQueue.length);
+    }
+    tryMatch();
+  });
+
+  // 매칭 대기 취소
+  socket.on("cancelMatchWait", () => {
+    const idx = waitingQueue.findIndex(u => u.socketId === socket.id);
+    if (idx !== -1) {
+      waitingQueue.splice(idx, 1);
+      console.log("[서버] 큐 취소:", socket.id);
+    }
+    socket.emit("matchWaitCanceled");
+  });
+
+  // 연결 끊기면 큐에서 제거
+  socket.on("disconnect", () => {
+    const idx = waitingQueue.findIndex(u => u.socketId === socket.id);
+    if (idx !== -1) {
+      waitingQueue.splice(idx, 1);
+      console.log("[서버] 큐에서 제거(연결끊김):", socket.id);
+    }
+  });
+
+  // 매칭 시도 함수
+  function tryMatch() {
+    if (waitingQueue.length >= 2) {
+      const userA = waitingQueue.shift();
+      const userB = waitingQueue.shift();
+      const matchId = uuidv4();
+      io.to(userA.socketId).emit("matched", { matchId });
+      io.to(userB.socketId).emit("matched", { matchId });
+      console.log("[서버] 매칭 성사!", matchId);
+    }
+  }
+}
+);
 // ---- (옵션) 헬스체크 라우트 ----
 app.get("/health", (req, res) => res.send("OK"));
 
@@ -118,3 +161,4 @@ app.get("/health", (req, res) => res.send("OK"));
 server.listen(process.env.PORT || 3001, () => {
   console.log("Socket.io server on " + (process.env.PORT || 3001));
 });
+

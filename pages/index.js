@@ -5,6 +5,8 @@ import { useState, useEffect, useRef } from "react";
 import { FaLock, FaBan } from "react-icons/fa";
 import ChatBox from "@/components/ChatBox";
 import useIsPremium from "@/hooks/useIsPremium";
+import { useChatModal } from "@/contexts/ChatModalContext"; // 추가
+import { io } from "socket.io-client";
 
 // 전역 애니메이션 스타일 추가 (styled-components 사용 시)
 const GlobalStyle = createGlobalStyle`
@@ -233,12 +235,15 @@ function isValidOrigin(origin) {
   return cleaned.length >= 2;
 }
 
+// 예시: 소켓 서버가 3001번 포트에서 실행 중일 때
+const socket = io("https://spontany-socket.fly.dev");
+
 export default function Home() {
   const { data: session } = useSession();
   const router = useRouter();
+  const { chatOpen, setChatOpen } = useChatModal();
 
   const [isClient, setIsClient] = useState(false);
-
   const isLoggedIn = !!session;
   const disabledStyle = {
     cursor: "not-allowed",
@@ -246,18 +251,10 @@ export default function Home() {
     color: "#bbb",
   };
 
-  // 1-1. 프리미엄 옵션 접힘/펼침 상태 및 핸들러 추가
   const [showPremiumFields, setShowPremiumFields] = useState(false);
   const handlePremiumOpen = () => setShowPremiumFields(v => !v);
-
   const [isPremium, setIsPremium] = useIsPremium();
-
-  // 프리미엄 안내 유도 핸들러 (팝업)
-  const handlePremiumClick = () => {
-    setShowPremiumPopup(true);
-  };
-
-  // localStorage/setIsPremium set시 window 체크 보강
+  const handlePremiumClick = () => setShowPremiumPopup(true);
   const handleSetPremium = () => {
     setIsPremium(true);
     setShowPremiumPopup(false);
@@ -279,28 +276,22 @@ export default function Home() {
   const [companionCount, setCompanionCount] = useState("");
   const [companionGender, setCompanionGender] = useState("");
   const [ageRange, setAgeRange] = useState("");
-  const [tags, setTags] = useState("");
-  const [travelStyle, setTravelStyle] = useState("");
   const [notice, setNotice] = useState("");
   const noticeTimeout = useRef();
   const [bgMood, setBgMood] = useState("기본");
-
   const [showLoginOverlay, setShowLoginOverlay] = useState(false);
-
-  // 4-1. 프리미엄 전환 팝업 state
   const [showPremiumPopup, setShowPremiumPopup] = useState(false);
-
   const [isLoading, setIsLoading] = useState(false);
-
-  // Toast 메시지 상태 추가
   const [toastMsg, setToastMsg] = useState("");
+  const [matchStatus, setMatchStatus] = useState(""); // "", "waiting", "matching" 등
+
+  const isMatching = matchStatus === "waiting" || matchStatus === "matching";
 
   function showToast(msg) {
     setToastMsg(msg);
     setTimeout(() => setToastMsg(""), 1700);
   }
 
-  // 2-2. 로그인 함수 수정
   async function handleLogin() {
     try {
       const res = await signIn("google", { redirect: false });
@@ -316,25 +307,13 @@ export default function Home() {
     if (session === null) {
       setMatchId("");
       localStorage.removeItem("spontanyMatchId");
+      setChatOpen(false);
     }
   }, [isClient, session]);
   useEffect(() => {
     if (!isClient) return;
     if (matchId) localStorage.setItem("spontanyMatchId", matchId);
   }, [isClient, matchId]);
-
-  // mood 변경 시 localStorage에 저장
-  useEffect(() => {
-    if (mood) {
-      localStorage.setItem("spontanyMood", mood);
-    }
-  }, [mood]);
-
-  // mount 시 localStorage에서 mood 불러오기
-  useEffect(() => {
-    const storedMood = localStorage.getItem("spontanyMood");
-    if (storedMood) setMood(storedMood);
-  }, []);
 
   const handleBudgetChange = (e) => {
     let val = e.target.value.replace(/[^0-9]/g, "");
@@ -352,7 +331,6 @@ export default function Home() {
       }
     : undefined;
 
-  // 로그인 안내 오버레이를 띄우는 함수
   const handleShowLoginOverlay = (e) => {
     if (e) e.preventDefault();
     setShowLoginOverlay(true);
@@ -376,11 +354,9 @@ export default function Home() {
   };
 
   const handleMoodClick = (newMood) => {
+    if (isMatching) return;
     setMood(newMood);
     setBgMood(newMood);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("spontanyMood", newMood);
-    }
   };
 
   const EMOTION_MSG = {
@@ -391,7 +367,7 @@ export default function Home() {
   };
 
   const handleRecommend = async () => {
-    if (!session) return;
+    if (!session || isMatching) return;
     if (!mood || !origin || !budget) return showInputNotice();
     setIsLoading(true);
     if (!isValidOrigin(origin)) {
@@ -401,7 +377,6 @@ export default function Home() {
       setIsLoading(false);
       return;
     }
-    // 실제 추천 로직
     await router.push({
       pathname: "/result",
       query: { departure: origin, budget, mood },
@@ -409,43 +384,70 @@ export default function Home() {
     setIsLoading(false);
   };
 
-  const handleRandomMatch = async () => {
-    if (!session) return;
-    const res = await fetch("/api/match", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: session.user.email,
-        mood,
-        origin,
-        style: travelStyle,
-      }),
+  // 매칭 요청 (fetch 제거, 소켓 emit만 사용)
+  const handleRandomMatch = () => {
+    if (!session || isMatching) return;
+    if (!mood || !origin || !budget) return showInputNotice();
+    setIsLoading(true);
+    setMatchStatus("waiting");
+    socket.emit("joinMatchQueue", {
+      userId: session.user.email, // 고유 식별자(이메일 등)
+      mood,
+      origin,
+      budget,
+      companionCount,
+      companionGender,
+      ageRange,
     });
-    const data = await res.json();
-    if (data.matchId) {
-      setMatchId(data.matchId);
-      localStorage.setItem("spontanyMatchId", data.matchId);
-      router.push({
-        pathname: "/result",
-        query: { departure: origin, budget, mood },
-      });
-    } else {
-      alert("매칭 실패");
-    }
   };
 
-  // 팝업 오픈 상태
-  const [chatOpen, setChatOpen] = useState(false);
+  // 매칭 취소
+  const handleCancelMatchWait = () => {
+    if (!isMatching) return;
+    socket.emit("cancelMatchWait");
+    // 상태 변경은 소켓 이벤트 리스너에서만!
+  };
 
-  // 매칭이 되면 자동으로 팝업 열기
+  // 소켓 이벤트 리스너 등록 (매칭 관련 상태는 여기서만 변경)
   useEffect(() => {
-    if (matchId && isClient) setChatOpen(true);
-  }, [matchId, isClient]);
+    function onMatched({ matchId }) {
+      setMatchId(matchId);
+      setChatOpen(true);
+      setIsLoading(false);
+      setMatchStatus("");
+    }
+    function onMatchFailed() {
+      setIsLoading(false);
+      setMatchStatus("");
+      setNotice("매칭에 실패했습니다. 다시 시도해 주세요.");
+      setChatOpen(false);
+      setMatchId("");
+    }
+    function onMatchWaitCanceled() {
+      setIsLoading(false);
+      setMatchStatus("");
+      setChatOpen(false);
+      setMatchId("");
+    }
+    socket.on("matched", onMatched);
+    socket.on("matchFailed", onMatchFailed);
+    socket.on("matchWaitCanceled", onMatchWaitCanceled);
+    return () => {
+      socket.off("matched", onMatched);
+      socket.off("matchFailed", onMatchFailed);
+      socket.off("matchWaitCanceled", onMatchWaitCanceled);
+    };
+  }, []);
 
-  function showToast(msg) {
-    setToastMsg(msg);
-    setTimeout(() => setToastMsg(""), 1700);
-  }
+  useEffect(() => {
+    setMatchId("");
+    setChatOpen(false);
+    localStorage.removeItem("spontanyMatchId");
+    localStorage.removeItem("spontanyChatOpen");
+  }, []);
+
+  // 입력/버튼/채팅모달 비활성화 조건
+  const allDisabled = isMatching || isLoading;
 
   return (
     <>
@@ -475,11 +477,11 @@ export default function Home() {
               <MoodBtn
                 tabIndex={0}
                 aria-label="설렘 감정 선택"
-                onClick={session ? () => handleMoodClick("설렘") : undefined}
+                onClick={session && !allDisabled ? () => handleMoodClick("설렘") : undefined}
                 $active={mood === "설렘"}
-                disabled={!session}
+                disabled={!session || allDisabled}
                 style={{
-                  ...(!session ? disabledStyle : {}),
+                  ...((!session || allDisabled) ? disabledStyle : {}),
                   borderColor: mood === "설렘" ? MOOD_COLOR_MAP["설렘"] : undefined,
                   color: mood === "설렘" ? MOOD_COLOR_MAP["설렘"] : undefined,
                   animation: mood === "설렘" ? "popEffect 0.22s" : undefined,
@@ -490,11 +492,11 @@ export default function Home() {
               <MoodBtn
                 tabIndex={0}
                 aria-label="힐링 감정 선택"
-                onClick={session ? () => handleMoodClick("힐링") : undefined}
+                onClick={session && !allDisabled ? () => handleMoodClick("힐링") : undefined}
                 $active={mood === "힐링"}
-                disabled={!session}
+                disabled={!session || allDisabled}
                 style={{
-                  ...(!session ? disabledStyle : {}),
+                  ...((!session || allDisabled) ? disabledStyle : {}),
                   borderColor: mood === "힐링" ? MOOD_COLOR_MAP["힐링"] : undefined,
                   color: mood === "힐링" ? MOOD_COLOR_MAP["힐링"] : undefined,
                   animation: mood === "힐링" ? "popEffect 0.22s" : undefined,
@@ -505,11 +507,11 @@ export default function Home() {
               <MoodBtn
                 tabIndex={0}
                 aria-label="기분전환 감정 선택"
-                onClick={session ? () => handleMoodClick("기분전환") : undefined}
+                onClick={session && !allDisabled ? () => handleMoodClick("기분전환") : undefined}
                 $active={mood === "기분전환"}
-                disabled={!session}
+                disabled={!session || allDisabled}
                 style={{
-                  ...(!session ? disabledStyle : {}),
+                  ...((!session || allDisabled) ? disabledStyle : {}),
                   borderColor: mood === "기분전환" ? MOOD_COLOR_MAP["기분전환"] : undefined,
                   color: mood === "기분전환" ? MOOD_COLOR_MAP["기분전환"] : undefined,
                   animation: mood === "기분전환" ? "popEffect 0.22s" : undefined,
@@ -526,10 +528,10 @@ export default function Home() {
                 type="text"
                 placeholder="예: 서울, 부산, 제주"
                 value={origin}
-                onChange={session ? handleOriginChange : undefined}
-                disabled={!session}
-                style={!session ? disabledStyle : undefined}
-                readOnly={!session}
+                onChange={session && !allDisabled ? handleOriginChange : undefined}
+                disabled={!session || allDisabled}
+                style={!session || allDisabled ? disabledStyle : undefined}
+                readOnly={!session || allDisabled}
                 tabIndex={0}
                 aria-label="출발지 입력"
               />
@@ -541,12 +543,12 @@ export default function Home() {
                 type="text"
                 placeholder="예산 금액 (원)"
                 value={budget}
-                onChange={session ? handleBudgetChange : undefined}
+                onChange={session && !allDisabled ? handleBudgetChange : undefined}
                 inputMode="numeric"
                 maxLength={11}
-                disabled={!session}
-                style={!session ? disabledStyle : undefined}
-                readOnly={!session}
+                disabled={!session || allDisabled}
+                style={!session || allDisabled ? disabledStyle : undefined}
+                readOnly={!session || allDisabled}
                 tabIndex={0}
                 aria-label="예산 입력"
               />
@@ -568,6 +570,7 @@ export default function Home() {
                 boxShadow: "0 2px 12px #b59ee833",
                 border: "1.5px solid #efebf8"
               }}>
+                {/* 동행 인원수 */}
                 <InputGroup>
                   <Label>
                     동행 인원수
@@ -575,9 +578,9 @@ export default function Home() {
                   </Label>
                   <Select
                     value={companionCount}
-                    onChange={isLoggedIn && isPremium ? (e) => setCompanionCount(e.target.value) : undefined}
-                    disabled={!isPremium || !isLoggedIn}
-                    style={!isPremium || !isLoggedIn ? disabledStyle : undefined}
+                    onChange={isLoggedIn && isPremium && !allDisabled ? (e) => setCompanionCount(e.target.value) : undefined}
+                    disabled={!isPremium || !isLoggedIn || allDisabled}
+                    style={!isPremium || !isLoggedIn || allDisabled ? disabledStyle : undefined}
                     onClick={!isPremium ? handlePremiumClick : undefined}
                   >
                     <option value="">선택</option>
@@ -587,6 +590,7 @@ export default function Home() {
                     <option value="4">4명 이상</option>
                   </Select>
                 </InputGroup>
+                {/* 동행 성별 */}
                 <InputGroup>
                   <Label>
                     동행 성별
@@ -595,8 +599,8 @@ export default function Home() {
                   <Select
                     value={companionGender}
                     onChange={e => setCompanionGender(e.target.value)}
-                    disabled={!isPremium || !isLoggedIn}
-                    style={!isPremium || !isLoggedIn ? disabledStyle : undefined}
+                    disabled={!isPremium || !isLoggedIn || allDisabled}
+                    style={!isPremium || !isLoggedIn || allDisabled ? disabledStyle : undefined}
                     onClick={!isPremium ? handlePremiumClick : undefined}
                   >
                     <option value="">선택</option>
@@ -605,6 +609,7 @@ export default function Home() {
                     <option value="male">남성</option>
                   </Select>
                 </InputGroup>
+                {/* 동행 나이대 */}
                 <InputGroup>
                   <Label>
                     동행 나이대
@@ -613,8 +618,8 @@ export default function Home() {
                   <Select
                     value={ageRange}
                     onChange={e => setAgeRange(e.target.value)}
-                    disabled={!isPremium || !isLoggedIn}
-                    style={!isPremium || !isLoggedIn ? disabledStyle : undefined}
+                    disabled={!isPremium || !isLoggedIn || allDisabled}
+                    style={!isPremium || !isLoggedIn || allDisabled ? disabledStyle : undefined}
                     onClick={!isPremium ? handlePremiumClick : undefined}
                   >
                     <option value="">선택</option>
@@ -622,43 +627,6 @@ export default function Home() {
                     <option value="30대">30대</option>
                     <option value="40대">40대</option>
                     <option value="50대+">50대 이상</option>
-                  </Select>
-                </InputGroup>
-                <InputGroup>
-                  <Label>
-                    취향 태그
-                    <PremiumLabel><FaLock />프리미엄</PremiumLabel>
-                  </Label>
-                  <TagInput
-                    type="text"
-                    placeholder="#힐링, #액티비티, #먹방"
-                    value={tags}
-                    onChange={e => setTags(e.target.value)}
-                    disabled={!isPremium || !isLoggedIn}
-                    maxLength={30}
-                    style={!isPremium || !isLoggedIn ? disabledStyle : undefined}
-                    onClick={!isPremium ? handlePremiumClick : undefined}
-                  />
-                  <TagDesc>콤마 또는 #으로 구분 (예: #음악, #조용한, #먹방)</TagDesc>
-                </InputGroup>
-                <InputGroup>
-                  <Label>
-                    여행 스타일
-                    <PremiumLabel><FaLock />프리미엄</PremiumLabel>
-                  </Label>
-                  <Select
-                    value={travelStyle}
-                    onChange={e => setTravelStyle(e.target.value)}
-                    disabled={!isPremium || !isLoggedIn}
-                    style={!isPremium || !isLoggedIn ? disabledStyle : undefined}
-                    onClick={!isPremium ? handlePremiumClick : undefined}
-                  >
-                    <option value="">선택</option>
-                    <option value="자유여행">자유여행</option>
-                    <option value="패키지">패키지</option>
-                    <option value="즉흥여행">즉흥여행</option>
-                    <option value="힐링">힐링</option>
-                    <option value="액티비티">액티비티</option>
                   </Select>
                 </InputGroup>
               </div>
@@ -689,50 +657,90 @@ export default function Home() {
             <PrimaryBtn
               tabIndex={0}
               aria-label="여행지 추천 받기"
-              onClick={session ? handleRecommend : undefined}
-              disabled={!session || isLoading}
-              $active={!!session}
-              style={!session ? { ...disabledStyle, background: "#eee" } : undefined}
+              onClick={session && !allDisabled ? handleRecommend : undefined}
+              disabled={!session || allDisabled}
+              $active={!!session && !allDisabled}
+              style={
+                !session || allDisabled
+                  ? { ...disabledStyle, background: "#eee" }
+                  : undefined
+              }
             >
               {isLoading ? "로딩 중..." : "여행지 추천 받기"}
             </PrimaryBtn>
-            <PrimaryBtn
-              tabIndex={0}
-              aria-label="랜덤 매칭하기"
-              onClick={isLoggedIn && isPremium ? handleRandomMatch : undefined}
-              disabled={!isLoggedIn || !isPremium}
-              $active={isLoggedIn && isPremium}
-              style={!isLoggedIn || !isPremium ? { ...disabledStyle, background: "#eee" } : undefined}
-            >
-              랜덤 매칭하기
-            </PrimaryBtn>
-            {/* 프리미엄 옵션 보기 버튼 (1개만) */}
-            <PrimaryBtn
-              tabIndex={0}
-              aria-label="프리미엄 옵션 보기"
-              type="button"
-              $active={isLoggedIn && isPremium}
-              disabled={!isLoggedIn || !isPremium}
-              onClick={isLoggedIn && isPremium ? handlePremiumOpen : undefined}
-              style={{
-                ...((!isLoggedIn || !isPremium) && { background: "#eee", color: "#bbb", cursor: "not-allowed" }),
-                marginBottom: showPremiumFields ? "0.8rem" : "1.8rem"
-              }}
-            >
-              {showPremiumFields ? "프리미엄 옵션 닫기" : "프리미엄 옵션 보기"}
-            </PrimaryBtn>
+
+            <ButtonGroup>
+              <PrimaryBtn
+                tabIndex={0}
+                aria-label={isMatching ? "매칭 취소하기" : "랜덤 매칭하기"}
+                onClick={
+                  isLoggedIn && isPremium
+                    ? () => {
+                        if (isMatching) {
+                          handleCancelMatchWait();
+                        } else {
+                          if (!mood || !origin || !budget) {
+                            showInputNotice();
+                            return;
+                          }
+                          handleRandomMatch();
+                        }
+                      }
+                    : undefined
+                }
+                disabled={
+                  !isLoggedIn ||
+                  !isPremium ||
+                  !mood ||
+                  !origin ||
+                  !budget ||
+                  allDisabled
+                }
+                $active={isLoggedIn && isPremium && mood && origin && budget && !allDisabled}
+                style={
+                  !isLoggedIn || !isPremium || !mood || !origin || !budget || allDisabled
+                    ? { ...disabledStyle, background: "#eee" }
+                    : undefined
+                }
+              >
+                {isMatching
+                  ? "매칭 취소하기"
+                  : "랜덤 매칭하기"}
+              </PrimaryBtn>
+
+              {(isMatching) && (
+                <MatchNotice>
+                  상대방을 찾는 중입니다... <br />잠시만 기다려주세요!
+                </MatchNotice>
+              )}
+
+              <PrimaryBtn
+                tabIndex={0}
+                aria-label="프리미엄 옵션 보기"
+                type="button"
+                $active={isLoggedIn && isPremium && !allDisabled}
+                disabled={!isLoggedIn || !isPremium || allDisabled}
+                onClick={isLoggedIn && isPremium && !allDisabled ? handlePremiumOpen : undefined}
+                style={{
+                  ...((!isLoggedIn || !isPremium || allDisabled) && { background: "#eee", color: "#bbb", cursor: "not-allowed" }),
+                  marginBottom: showPremiumFields ? "0.8rem" : "1.8rem"
+                }}
+              >
+                {showPremiumFields ? "프리미엄 옵션 닫기" : "프리미엄 옵션 보기"}
+              </PrimaryBtn>
+            </ButtonGroup>
 
             {/* 프리미엄 무료 이용가능 버튼 (비프리미엄 때만) */}
             {!isPremium && (
               <PremiumBtn
                 tabIndex={0}
                 aria-label="프리미엄 무료 이용가능"
-                onClick={isLoggedIn ? handleSetPremium : undefined}
-                disabled={!isLoggedIn}
+                onClick={isLoggedIn && !allDisabled ? handleSetPremium : undefined}
+                disabled={!isLoggedIn || allDisabled}
                 style={{
                   background: "#7b2ff2",
                   color: "#fff",
-                  cursor: !isLoggedIn ? "not-allowed" : "pointer"
+                  cursor: !isLoggedIn || allDisabled ? "not-allowed" : "pointer"
                 }}
               >
                 <span style={{ marginRight: 8 }}>🔒</span> 프리미엄 무료 이용가능 !
@@ -743,6 +751,7 @@ export default function Home() {
             <EmotionMsg style={{ color: MOOD_COLOR_MAP[mood || "기본"] }} aria-live="polite">
               {EMOTION_MSG[mood || "기본"]}
             </EmotionMsg>
+
             {!isLoggedIn && (
               <LoginOverlay>
                 <LoginNoticeMsg>
@@ -754,7 +763,6 @@ export default function Home() {
                     회원가입 없이 <b style={{ color: "#fc575e" }}>간편 로그인</b>으로<br />
                     오늘의 여행지 추천을 받아보세요!
                   </div>
-                  {/* SNS 간편 로그인 안내 뱃지/아이콘 */}
                   <div style={{
                     marginBottom: 8,
                     display: "flex",
@@ -773,7 +781,6 @@ export default function Home() {
                     }}>
                       SNS(네이버·카카오·구글) 간편 로그인 지원
                     </span>
-                    {/* 필요시 각 SNS 아이콘 추가 가능 */}
                   </div>
                   <LoginButton onClick={handleLogin}>
                     간편 로그인 시작하기
@@ -789,7 +796,7 @@ export default function Home() {
             )}
           </FormBox>
           {/* 채팅 팝업 버튼 */}
-          {isClient && matchId && session !== null && !chatOpen && (
+          {isClient && matchId && session !== null && !chatOpen && !allDisabled && (
             <button
               onClick={() => setChatOpen(true)}
               style={{
@@ -817,7 +824,7 @@ export default function Home() {
             </button>
           )}
           {/* 채팅 팝업 */}
-          {isClient && matchId && session !== null && chatOpen && (
+          {isClient && matchId && session !== null && chatOpen && matchStatus === "" && !allDisabled && (
             <ChatPopupBackdrop onClick={() => setChatOpen(false)}>
               <ChatPopupWrap onClick={e => e.stopPropagation()}>
                 <ChatPopupHeader>
@@ -993,4 +1000,26 @@ const Toast = styled.div`
     0% { opacity: 0; transform: translateY(40px) scale(0.97); }
     100% { opacity: 1; transform: none; }
   }
+`;
+
+const ButtonGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem; /* 버튼 간 간격 */
+  margin: 2.1rem 0 1.2rem 0;
+  align-items: stretch;
+`;
+
+const MatchNotice = styled(Notice)`
+  color: #7b2ff2;
+  background: linear-gradient(90deg, #fbc2eb22 0%, #a6c1ee22 100%);
+  margin: 1.1rem 0 0.7rem 0;
+  font-size: 1.13rem;
+  font-weight: 900;
+  border-radius: 1.1em;
+  padding: 1.1em 0.7em;
+  box-shadow: 0 2px 12px #b59ee822;
+  letter-spacing: -0.01em;
+  min-height: 2.2em;
+  text-align: center;
 `;

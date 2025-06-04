@@ -19,10 +19,15 @@ const HeaderWrap = styled.header`
 `;
 
 const Logo = styled(Link)`
-  font-size: 2.1rem; font-weight: 900; letter-spacing: -0.03em;
-  color: #7b2ff2; text-decoration: none;
+  font-size: 2.1rem;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  color: #7b2ff2;
+  text-decoration: none;
   background: linear-gradient(90deg, #7b2ff2 10%, #f357a8 90%);
-  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  display: inline-block;
 `;
 
 const Nav = styled.nav`

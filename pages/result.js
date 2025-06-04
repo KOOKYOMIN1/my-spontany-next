@@ -2,7 +2,10 @@
 import styled from "styled-components";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
-import { FaShareAlt, FaRedo, FaArrowLeft, FaClock, FaSave, FaHistory } from "react-icons/fa";
+import { FaShareAlt, FaRedo, FaArrowLeft, FaClock, FaSave, FaHistory, FaLock } from "react-icons/fa";
+import { useChatModal } from "@/contexts/ChatModalContext";
+import ChatBox from "@/components/ChatBox";
+import { useSession } from "next-auth/react";
 
 const MOOD_BG_MAP = {
   설렘: "/sakura.jpg",
@@ -31,9 +34,13 @@ async function fetchPexelsImage(keyword, mood) {
   }
 }
 
-export default function Result() {
+export default function Result(props) {
+  const { data: session } = useSession(); // ← 이거 꼭 있어야 함!
   const router = useRouter();
   const { mood: queryMood = "기본", departure = "", budget = "" } = router.query;
+
+  const { chatOpen, setChatOpen } = useChatModal();
+  const [matchId, setMatchId] = useState("");
 
   const [mood, setMood] = useState(queryMood);
   const [loading, setLoading] = useState(true);
@@ -174,6 +181,14 @@ export default function Result() {
     setShowHistory(false);
   }
 
+  // 페이지 진입 시 localStorage에서 상태 복원
+  useEffect(() => {
+    const storedMatchId = localStorage.getItem("spontanyMatchId");
+    const storedChatOpen = localStorage.getItem("spontanyChatOpen");
+    if (storedMatchId) setMatchId(storedMatchId);
+    if (storedChatOpen === "true") setChatOpen(true);
+  }, [setChatOpen]);
+
   return (
     <ResultBg $bg={MOOD_BG_MAP[mood] || MOOD_BG_MAP["기본"]}>
       <BgBlur />
@@ -264,6 +279,32 @@ export default function Result() {
           </HistoryModal>
         )}
       </ResultCard>
+
+      {/* 채팅방 모달: matchId와 chatOpen이 모두 true일 때만 표시 */}
+      {matchId && (
+        <>
+          <ChatToggleBtn
+            onClick={() => setChatOpen((v) => !v)}
+            aria-label={chatOpen ? "채팅 닫기" : "채팅 열기"}
+          >
+            {chatOpen ? "채팅 닫기" : "채팅 열기"}
+          </ChatToggleBtn>
+          {chatOpen && (
+            <ChatPopupBackdrop onClick={() => setChatOpen(false)}>
+              <ChatPopupWrap onClick={e => e.stopPropagation()}>
+                <ChatPopupHeader>
+                  <span>
+                    <FaLock /> 동행 채팅방
+                  </span>
+                  <ChatPopupClose onClick={() => setChatOpen(false)} aria-label="채팅 닫기">&times;</ChatPopupClose>
+                </ChatPopupHeader>
+                <ChatDivider />
+                <ChatBox matchId={matchId} myName={session?.user?.name || "me"} />
+              </ChatPopupWrap>
+            </ChatPopupBackdrop>
+          )}
+        </>
+      )}
     </ResultBg>
   );
 }
@@ -454,6 +495,105 @@ const CloseHistoryBtn = styled.button`
   box-shadow: 0 2px 10px #fc575e22;
   cursor: pointer; transition: filter 0.12s;
   &:hover { filter: brightness(1.07); }
+`;
+
+const ChatPopupBackdrop = styled.div`
+  position: fixed;
+  z-index: 2000;
+  left: 0; top: 0; right: 0; bottom: 0;
+  background: rgba(60, 40, 100, 0.13);
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+`;
+
+const ChatPopupWrap = styled.div`
+  position: fixed;
+  right: 2vw;
+  bottom: 3vh;
+  z-index: 2100;
+  width: 400px;
+  max-width: 95vw;
+  background: rgba(255,255,255,0.97);
+  border-radius: 1.3rem 1.3rem 1.1rem 1.1rem;
+  box-shadow: 0 8px 32px #a18cd144;
+  border: 1.5px solid #e0d7fa;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  animation: popupOpen 0.23s cubic-bezier(.4,1.6,.5,1) both;
+
+  @media (max-width: 600px) {
+    right: 0;
+    left: 0;
+    bottom: 0;
+    top: auto;
+    width: 100vw;
+    min-height: 62vh;
+    max-height: 90vh;
+    border-radius: 1.1rem 1.1rem 0 0;
+    margin: 0;
+  }
+  @keyframes popupOpen {
+    0% { transform: translateY(60px) scale(0.97); opacity: 0; }
+    100% { transform: none; opacity: 1; }
+`;
+
+const ChatPopupHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.2rem 0.5rem 1.2rem;
+  font-size: 1.13rem;
+  font-weight: 800;
+  color: #7b2ff2;
+  letter-spacing: -0.01em;
+  svg { color: #fc575e; font-size: 1.2em; margin-right: 0.5em; }
+`;
+
+const ChatPopupClose = styled.button`
+  background: none;
+  border: none;
+  color: #bbb;
+  font-size: 1.5em;
+  cursor: pointer;
+  transition: color 0.13s;
+  margin-left: 0.5em;
+  &:hover { color: #fc575e; }
+`;
+
+const ChatDivider = styled.div`
+  height: 1px;
+  background: linear-gradient(90deg, #fbc2eb33 0%, #a6c1ee33 100%);
+  margin: 0.2rem 0 0.7rem 0;
+`;
+
+const ChatToggleBtn = styled.button`
+  position: fixed;
+  right: 28px;
+  bottom: 32px;
+  z-index: 1999;
+  background: linear-gradient(90deg, #7b2ff2 0%, #f357a8 100%);
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  width: 58px;
+  height: 58px;
+  box-shadow: 0 4px 18px #a18cd144;
+  font-size: 18px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s;
+  @media (max-width: 600px) {
+    right: 12px;
+    bottom: 18px;
+    width: 48px;
+    height: 48px;
+    font-size: 15px;
+  }
 `;
 
 function LoadingBar(props) {

@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from "react";
-import socket from "@/lib/socket-client";
+import { io } from "socket.io-client";
+
+const socket = io("https://spontany-socket.fly.dev"); // 실제 주소로 변경
 
 // 시간 포맷 (ex. 15:12 → 오후 3:12)
 function formatTime(ts) {
@@ -18,9 +20,7 @@ export default function ChatBox({ matchId, myName }) {
   const [systemMsg, setSystemMsg] = useState("상대방을 기다리는 중...");
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
-
-  // socket null 방어
-  if (!socket) return <div>채팅 서버 연결 중...</div>;
+  const joinedRef = useRef(false);
 
   // 스크롤 아래로
   useEffect(() => {
@@ -31,7 +31,10 @@ export default function ChatBox({ matchId, myName }) {
   useEffect(() => {
     if (!matchId) return;
 
-    socket.emit("joinRoom", { matchId });
+    if (!joinedRef.current) {
+      socket.emit("joinRoom", { matchId });
+      joinedRef.current = true;
+    }
 
     function onChatHistory(msgs = []) {
       setMessages(msgs);
@@ -63,7 +66,8 @@ export default function ChatBox({ matchId, myName }) {
     setSystemMsg("상대방을 기다리는 중...");
 
     return () => {
-      socket.emit("leaveRoom", { matchId });
+      if (matchId) socket.emit("leaveRoom", { matchId });
+      joinedRef.current = false;
       socket.off("chatHistory", onChatHistory);
       socket.off("receiveMessage", onReceiveMsg);
       socket.off("partner-joined", onPartnerJoin);

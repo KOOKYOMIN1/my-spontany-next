@@ -1,15 +1,14 @@
 // /pages/_app.js
 import { SessionProvider } from "next-auth/react";
 import Header from "@/components/Header";
-// 전역 스타일이 있다면 아래 import 유지, 없다면 삭제
 import GlobalStyle from "@/styles/GlobalStyle";
-
 import "../styles/globals.css";
+import { ChatModalProvider } from "@/contexts/ChatModalContext";
 
 export default function App({ Component, pageProps: { session, ...pageProps } }) {
   return (
     <SessionProvider session={session} key={session?.user?.email || "no-user"}>
-      <>
+      <ChatModalProvider>
         {/* 전역 스타일(필요할 때) */}
         <GlobalStyle />
         <Header />
@@ -21,7 +20,7 @@ export default function App({ Component, pageProps: { session, ...pageProps } })
         >
           <Component {...pageProps} />
         </div>
-      </>
+      </ChatModalProvider>
     </SessionProvider>
   );
 }
