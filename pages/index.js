@@ -7,7 +7,7 @@ import ChatBox from "@/components/ChatBox";
 import useIsPremium from "@/hooks/useIsPremium";
 import { useChatModal } from "@/contexts/ChatModalContext"; // 추가
 import { io } from "socket.io-client";
-import socket from "../utils/socket";
+import socket from "../lib/socket-client";
 
 // 전역 애니메이션 스타일 추가 (styled-components 사용 시)
 const GlobalStyle = createGlobalStyle`

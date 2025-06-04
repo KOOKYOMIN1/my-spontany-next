@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { io } from "socket.io-client";
-import socket from "../utils/socket";
+import socket from "../lib/socket-client";
 
 
 // 시간 포맷 (ex. 15:12 → 오후 3:12)
