@@ -23,18 +23,18 @@ app = "spontany-socket"
     soft_limit = 20
     type = "connections"
 
+  # --- WebSocket 및 일반 HTTP 정상 체크 ---
   [[services.tcp_checks]]
     interval = "15s"
     timeout = "2s"
     grace_period = "5s"
     restart_limit = 0
 
-# 반드시 추가! (WebSocket 트래픽 허용)
-[[services.http_checks]]
-  interval = "10s"
-  timeout = "2s"
-  method = "get"
-  path = "/socket.io/"
-  protocol = "http"
-  grace_period = "5s"
-  restart_limit = 0
+  [[services.http_checks]]
+    interval = "10s"
+    timeout = "2s"
+    method = "get"
+    path = "/socket.io/"
+    protocol = "http"
+    grace_period = "5s"
+    restart_limit = 0
