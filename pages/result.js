@@ -17,32 +17,39 @@ const MOOD_COLOR_MAP = {
   기본: "#7b2ff2",
 };
 
+async function fetchPexelsImage(keyword, mood) {
+  try {
+    const res = await fetch(
+      `/api/fetch-pexels?query=${encodeURIComponent(keyword)}&mood=${encodeURIComponent(mood)}`,
+      { method: "GET" }
+    );
+    const data = await res.json();
+    console.log("Pexels 이미지:", data.imgUrl);
+    return data.imgUrl || MOOD_BG_MAP[mood] || MOOD_BG_MAP["기본"];
+  } catch {
+    return MOOD_BG_MAP[mood] || MOOD_BG_MAP["기본"];
+  }
+}
+
 export default function Result() {
   const router = useRouter();
   const { mood: queryMood = "기본", departure = "", budget = "" } = router.query;
 
-  // --- 기존 상태 ---
   const [mood, setMood] = useState(queryMood);
   const [loading, setLoading] = useState(true);
 
-  // GPT 상세 일정표
   const [itinerary, setItinerary] = useState([]);
   const [itLoading, setItLoading] = useState(true);
 
-  // 이미지
+  // 🎯 [변경] 카드에 쓸 메인 사진만 동적 imgUrl
   const [imgUrl, setImgUrl] = useState(MOOD_BG_MAP[mood] || MOOD_BG_MAP["기본"]);
 
-  // 저장/공유 안내
   const [toast, setToast] = useState("");
-
-  // 히스토리 모달
   const [showHistory, setShowHistory] = useState(false);
   const [historyList, setHistoryList] = useState([]);
 
-  // 테마 메시지 상태 추가
   const [themeMsg, setThemeMsg] = useState("여행을 시작할 시간이에요!");
 
-  // --- window 체크 후 localStorage 사용 ---
   useEffect(() => {
     if (typeof window !== "undefined" && showHistory) {
       const list = JSON.parse(localStorage.getItem("spontanyHistory") || "[]");
@@ -50,9 +57,9 @@ export default function Result() {
     }
   }, [showHistory]);
 
-  // themeMsg fetch
+  // 🎯 [변경] 배경은 무조건 MOOD_BG_MAP, 카드 사진만 fetchPexelsImage로 동적 처리
   useEffect(() => {
-    async function fetchTheme() {
+    async function fetchThemeAndImg() {
       setLoading(true);
       try {
         const res = await fetch("/api/generate-theme", {
@@ -62,15 +69,22 @@ export default function Result() {
         });
         const data = await res.json();
         setThemeMsg(data.theme || "여행을 시작할 시간이에요!");
+
+        if (data.imageKeyword) {
+          const img = await fetchPexelsImage(data.imageKeyword, mood);
+          setImgUrl(img);
+        } else {
+          setImgUrl(MOOD_BG_MAP[mood] || MOOD_BG_MAP["기본"]);
+        }
       } catch {
         setThemeMsg("여행을 시작할 시간이에요!");
+        setImgUrl(MOOD_BG_MAP[mood] || MOOD_BG_MAP["기본"]);
       }
       setLoading(false);
     }
-    fetchTheme();
+    fetchThemeAndImg();
   }, [mood, departure, budget]);
 
-  // 일정 fetch
   useEffect(() => {
     async function fetchItinerary() {
       setItLoading(true);
@@ -81,7 +95,19 @@ export default function Result() {
           body: JSON.stringify({ mood, departure, budget })
         });
         const data = await res.json();
-        setItinerary(data.itinerary || []);
+        let itineraryArr = [];
+        if (Array.isArray(data.itinerary)) {
+          itineraryArr = data.itinerary;
+        } else if (typeof data.itinerary === "string") {
+          try {
+            itineraryArr = JSON.parse(data.itinerary);
+          } catch {
+            itineraryArr = [];
+          }
+        } else if (data.itinerary && typeof data.itinerary === "object") {
+          itineraryArr = [data.itinerary];
+        }
+        setItinerary(itineraryArr);
       } catch {
         setItinerary([]);
       }
@@ -90,14 +116,12 @@ export default function Result() {
     fetchItinerary();
   }, [mood, departure, budget]);
 
-  // mood 변경 시 localStorage에 저장
   useEffect(() => {
     if (mood) {
       localStorage.setItem("spontanyMood", mood);
     }
   }, [mood]);
 
-  // mount 시 localStorage에서 mood 불러오기
   useEffect(() => {
     const storedMood = localStorage.getItem("spontanyMood");
     if (storedMood) setMood(storedMood);
@@ -151,7 +175,7 @@ export default function Result() {
   }
 
   return (
-    <ResultBg $bg={imgUrl}>
+    <ResultBg $bg={MOOD_BG_MAP[mood] || MOOD_BG_MAP["기본"]}>
       <BgBlur />
       <ResultCard>
         <BackBtn onClick={handleBack} aria-label="처음으로">
@@ -195,7 +219,7 @@ export default function Result() {
             <ul>
               {itinerary.map((item, idx) => (
                 <ItineraryItem key={idx}>
-                  <div className="time">{item.time || `${idx+1}일차`}</div>
+                  <div className="time">{item.time || `${idx + 1}일차`}</div>
                   <div className="desc">{item.desc}</div>
                 </ItineraryItem>
               ))}
@@ -227,7 +251,7 @@ export default function Result() {
                     <ul style={{ margin: "0.7em 0 0.1em 0", padding: 0, listStyle: "none" }}>
                       {h.itinerary?.map?.((item, idx2) => (
                         <li key={idx2} style={{ color: "#7b2ff2", fontWeight: 600, marginBottom: 4 }}>
-                          <span style={{ color: "#b6a1d6" }}>{item.time || `${idx2+1}일차`} : </span>
+                          <span style={{ color: "#b6a1d6" }}>{item.time || `${idx2 + 1}일차`} : </span>
                           {item.desc}
                         </li>
                       ))}
