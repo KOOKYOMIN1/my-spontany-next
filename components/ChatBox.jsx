@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { io } from "socket.io-client";
 
-const socket = io("https://spontany-socket.fly.dev"); // 실제 주소로 변경
-
+const socket = io("https://spontany-socket.fly.dev", {
+  transports: ["websocket"],
+  secure: true,
+});
 // 시간 포맷 (ex. 15:12 → 오후 3:12)
 function formatTime(ts) {
   const d = new Date(ts);
