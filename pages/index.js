@@ -323,6 +323,19 @@ export default function Home() {
     if (matchId) localStorage.setItem("spontanyMatchId", matchId);
   }, [isClient, matchId]);
 
+  // mood 변경 시 localStorage에 저장
+  useEffect(() => {
+    if (mood) {
+      localStorage.setItem("spontanyMood", mood);
+    }
+  }, [mood]);
+
+  // mount 시 localStorage에서 mood 불러오기
+  useEffect(() => {
+    const storedMood = localStorage.getItem("spontanyMood");
+    if (storedMood) setMood(storedMood);
+  }, []);
+
   const handleBudgetChange = (e) => {
     let val = e.target.value.replace(/[^0-9]/g, "");
     if (!val) {
@@ -365,6 +378,9 @@ export default function Home() {
   const handleMoodClick = (newMood) => {
     setMood(newMood);
     setBgMood(newMood);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("spontanyMood", newMood);
+    }
   };
 
   const EMOTION_MSG = {
@@ -536,18 +552,6 @@ export default function Home() {
               />
             </InputGroup>
 
-            {/* 1-2. 프리미엄 옵션 오픈 버튼 */}
-            <PrimaryBtn
-              tabIndex={0}
-              aria-label="프리미엄 옵션 보기"
-              type="button"
-              $active={!!isLoggedIn}
-              onClick={handlePremiumOpen}
-              style={{ marginBottom: showPremiumFields ? "0.8rem" : "1.8rem" }}
-            >
-              {showPremiumFields ? "프리미엄 옵션 닫기" : "프리미엄 옵션 보기"}
-            </PrimaryBtn>
-
             {/* 프리미엄 혜택 안내 */}
             <Notice style={{ color: "#fc575e", marginBottom: "1.1rem" }}>
               동행/취향/스타일 옵션은 프리미엄에서만 사용 가능합니다.
@@ -695,24 +699,45 @@ export default function Home() {
             <PrimaryBtn
               tabIndex={0}
               aria-label="랜덤 매칭하기"
-              onClick={isLoggedIn ? handleRandomMatch : undefined}
-              disabled={!isLoggedIn}
-              $active={isLoggedIn}
-              style={!isLoggedIn ? { ...disabledStyle, background: "#eee" } : undefined}
+              onClick={isLoggedIn && isPremium ? handleRandomMatch : undefined}
+              disabled={!isLoggedIn || !isPremium}
+              $active={isLoggedIn && isPremium}
+              style={!isLoggedIn || !isPremium ? { ...disabledStyle, background: "#eee" } : undefined}
             >
               랜덤 매칭하기
             </PrimaryBtn>
-            <PremiumBtn
+            {/* 프리미엄 옵션 보기 버튼 (1개만) */}
+            <PrimaryBtn
               tabIndex={0}
-              aria-label={isPremium ? "프리미엄 전환 완료" : "프리미엄 무료 이용가능"}
-              onClick={isLoggedIn ? () => setIsPremium(true) : undefined}
-              $active={isPremium}
-              disabled={!isLoggedIn}
-              style={!isLoggedIn ? { ...disabledStyle, opacity: 0.5, pointerEvents: "none" } : undefined}
+              aria-label="프리미엄 옵션 보기"
+              type="button"
+              $active={isLoggedIn && isPremium}
+              disabled={!isLoggedIn || !isPremium}
+              onClick={isLoggedIn && isPremium ? handlePremiumOpen : undefined}
+              style={{
+                ...((!isLoggedIn || !isPremium) && { background: "#eee", color: "#bbb", cursor: "not-allowed" }),
+                marginBottom: showPremiumFields ? "0.8rem" : "1.8rem"
+              }}
             >
-              <FaLock />
-              {isPremium ? "프리미엄 전환 완료!" : "프리미엄 무료 이용가능 !"}
-            </PremiumBtn>
+              {showPremiumFields ? "프리미엄 옵션 닫기" : "프리미엄 옵션 보기"}
+            </PrimaryBtn>
+
+            {/* 프리미엄 무료 이용가능 버튼 (비프리미엄 때만) */}
+            {!isPremium && (
+              <PremiumBtn
+                tabIndex={0}
+                aria-label="프리미엄 무료 이용가능"
+                onClick={isLoggedIn ? handleSetPremium : undefined}
+                disabled={!isLoggedIn}
+                style={{
+                  background: "#7b2ff2",
+                  color: "#fff",
+                  cursor: !isLoggedIn ? "not-allowed" : "pointer"
+                }}
+              >
+                <span style={{ marginRight: 8 }}>🔒</span> 프리미엄 무료 이용가능 !
+              </PremiumBtn>
+            )}
 
             <Notice aria-live="polite">{notice}</Notice>
             <EmotionMsg style={{ color: MOOD_COLOR_MAP[mood || "기본"] }} aria-live="polite">

@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { FaShareAlt, FaRedo, FaArrowLeft, FaClock, FaSave, FaHistory } from "react-icons/fa";
 
 const MOOD_BG_MAP = {
-  설렘: "https://images.unsplash.com/photo-1524253482453-3fed8d2fe12b?auto=format&fit=crop&w=1600&q=80",
+  설렘: "/sakura.jpg",
   힐링: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1600&q=80",
   기분전환: "https://images.unsplash.com/photo-1747372236557-6a201063ab35?auto=format&fit=crop&w=1600&q=80",
   기본: "https://images.unsplash.com/photo-1503264116251-35a269479413?auto=format&fit=crop&w=1600&q=80",
@@ -19,10 +19,10 @@ const MOOD_COLOR_MAP = {
 
 export default function Result() {
   const router = useRouter();
-  const { mood = "기본", departure = "", budget = "" } = router.query;
+  const { mood: queryMood = "기본", departure = "", budget = "" } = router.query;
 
-  // GPT 감성 테마 문장
-  const [themeMsg, setThemeMsg] = useState("");
+  // --- 기존 상태 ---
+  const [mood, setMood] = useState(queryMood);
   const [loading, setLoading] = useState(true);
 
   // GPT 상세 일정표
@@ -38,6 +38,9 @@ export default function Result() {
   // 히스토리 모달
   const [showHistory, setShowHistory] = useState(false);
   const [historyList, setHistoryList] = useState([]);
+
+  // 테마 메시지 상태 추가
+  const [themeMsg, setThemeMsg] = useState("여행을 시작할 시간이에요!");
 
   // --- window 체크 후 localStorage 사용 ---
   useEffect(() => {
@@ -86,6 +89,19 @@ export default function Result() {
     }
     fetchItinerary();
   }, [mood, departure, budget]);
+
+  // mood 변경 시 localStorage에 저장
+  useEffect(() => {
+    if (mood) {
+      localStorage.setItem("spontanyMood", mood);
+    }
+  }, [mood]);
+
+  // mount 시 localStorage에서 mood 불러오기
+  useEffect(() => {
+    const storedMood = localStorage.getItem("spontanyMood");
+    if (storedMood) setMood(storedMood);
+  }, []);
 
   function handleShare() {
     if (navigator.share) {

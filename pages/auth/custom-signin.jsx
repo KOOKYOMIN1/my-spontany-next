@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import styled, { keyframes } from "styled-components";
 import { signIn } from "next-auth/react";
 
@@ -52,56 +52,19 @@ const ModalClose = styled.button`
   }
 `;
 
-const AuthBtn = styled.button`
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 0.7em;
-  justify-content: center;
-  border: none;
-  border-radius: 0.7rem;
-  padding: 0.7em 1.4em;
-  font-size: 1rem;
-  font-weight: 700;
-  cursor: pointer;
-  margin-bottom: 0.7rem;
-  transition: background 0.15s, transform 0.1s;
-  &:active {
-    transform: scale(0.96);
-    filter: brightness(0.96);
-  }
-`;
-
-const GoogleBtn = styled(AuthBtn)`
-  background: #fff;
-  color: #222;
-  border: 1.5px solid #eee;
-  &:hover {
-    background: #f5f5f5;
-  }
-`;
-
-const NaverBtn = styled(AuthBtn)`
-  background: #03c75a;
-  color: #fff;
-  &:hover {
-    background: #02b152;
-  }
-`;
-
-const KakaoBtn = styled(AuthBtn)`
-  background: #fee500;
-  color: #3c1e1e;
-  border: 1.5px solid #f7e600;
-  &:hover {
-    background: #ffe45c;
-  }
-`;
-
 export default function CustomSignIn() {
+  const [loginLoading, setLoginLoading] = useState(false);
+
   const handleClose = () => {
     if (window.history.length > 1) window.history.back();
     else window.location.href = "/";
+  };
+
+  const handleSocialLogin = async (provider) => {
+    if (loginLoading) return;
+    setLoginLoading(true);
+    await signIn(provider, { callbackUrl: "/" });
+    setLoginLoading(false);
   };
 
   return (
@@ -120,45 +83,93 @@ export default function CustomSignIn() {
         >
           SNS 간편 로그인
         </div>
-        <GoogleBtn onClick={() => signIn("google")}>
+        <button
+          style={{
+            width: "100%",
+            marginBottom: 12,
+            background: "#fff",
+            color: "#222",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 10,
+            border: "none",
+            borderRadius: "0.7rem",
+            fontWeight: 700,
+            fontSize: "1rem",
+            padding: "0.7em 1.4em",
+            cursor: "pointer",
+          }}
+          onClick={() => handleSocialLogin("google")}
+          disabled={loginLoading}
+        >
           <img
             src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/google/google-original.svg"
             alt="Google"
             width={22}
             height={22}
-            style={{
-              background: "#fff",
-              borderRadius: "50%",
-            }}
+            style={{ borderRadius: "50%" }}
           />
           구글로 로그인
-        </GoogleBtn>
-        <NaverBtn onClick={() => signIn("naver")}>
+        </button>
+        <button
+          style={{
+            width: "100%",
+            marginBottom: 12,
+            background: "#03c75a",
+            color: "#fff",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 10,
+            border: "none",
+            borderRadius: "0.7rem",
+            fontWeight: 700,
+            fontSize: "1rem",
+            padding: "0.7em 1.4em",
+            cursor: "pointer",
+          }}
+          onClick={() => handleSocialLogin("naver")}
+          disabled={loginLoading}
+        >
           <img
-            src="https://upload.wikimedia.org/wikipedia/commons/2/2e/Naver_Logotype.svg"
+            src="https://static.nid.naver.com/oauth/big_g.PNG"
             alt="Naver"
             width={22}
             height={22}
-            style={{
-              background: "#fff",
-              borderRadius: "50%",
-            }}
+            style={{ borderRadius: "50%" }}
           />
           네이버로 로그인
-        </NaverBtn>
-        <KakaoBtn onClick={() => signIn("kakao")}>
+        </button>
+        <button
+          style={{
+            width: "100%",
+            marginBottom: 12,
+            background: "#fee500",
+            color: "#3c1e1e",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 10,
+            border: "none",
+            borderRadius: "0.7rem",
+            fontWeight: 700,
+            fontSize: "1rem",
+            padding: "0.7em 1.4em",
+            cursor: "pointer",
+          }}
+          onClick={() => handleSocialLogin("kakao")}
+          disabled={loginLoading}
+        >
           <img
             src="https://cdn.jsdelivr.net/gh/simple-icons/simple-icons/icons/kakao.svg"
             alt="Kakao"
             width={22}
             height={22}
-            style={{
-              background: "#fee500",
-              borderRadius: "50%",
-            }}
+            style={{ borderRadius: "50%" }}
           />
           카카오로 로그인
-        </KakaoBtn>
+        </button>
         <div
           style={{
             marginTop: 15,
