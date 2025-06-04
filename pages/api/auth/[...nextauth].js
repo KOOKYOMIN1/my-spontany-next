@@ -5,9 +5,9 @@ import KakaoProvider from "next-auth/providers/kakao";
 import mongoose from "mongoose";
 import User from "@/models/User";
 
-// DB 연결 함수
+// DB 연결 함수 (에러 방지용 패턴)
 async function connectToDB() {
-  if (mongoose.connections[0].readyState !== 1) {
+  if (mongoose.connection.readyState !== 1) {
     await mongoose.connect(process.env.MONGODB_URI);
   }
 }
@@ -22,7 +22,6 @@ export default NextAuth({
       clientId: process.env.NAVER_CLIENT_ID,
       clientSecret: process.env.NAVER_CLIENT_SECRET,
       profile(profile) {
-        // nickname > name > "네이버 사용자"
         return {
           id: profile.response.id,
           name: profile.response.nickname || profile.response.name || "네이버 사용자",
@@ -35,14 +34,9 @@ export default NextAuth({
       clientId: process.env.KAKAO_CLIENT_ID,
       clientSecret: process.env.KAKAO_CLIENT_SECRET,
       profile(profile) {
-        // nickname > "카카오 사용자"
         return {
           id: profile.id.toString(),
-          name:
-            (profile.kakao_account &&
-              profile.kakao_account.profile &&
-              profile.kakao_account.profile.nickname) ||
-            "카카오 사용자",
+          name: profile.kakao_account?.profile?.nickname || "카카오 사용자",
           email: profile.kakao_account?.email ?? `${profile.id}@kakao.com`,
           image: profile.kakao_account?.profile?.profile_image_url ?? null,
         };
@@ -55,28 +49,29 @@ export default NextAuth({
   },
   callbacks: {
     async jwt({ token, account, profile }) {
+      // 최초 로그인시만 user DB 저장
       if (account && profile) {
         token.id = profile.id;
         token.email = profile.email ?? `${profile.id}@${account.provider}.com`;
         token.name = profile.name ?? `${account.provider} 사용자`;
         token.picture = profile.image ?? null;
+        token.provider = account.provider;
 
-        // DB 유저 생성/갱신
         await connectToDB();
-        const existingUser = await User.findOne({ email: token.email });
-        if (!existingUser) {
+        const exists = await User.findOne({ email: token.email });
+        if (!exists) {
           await User.create({
             email: token.email,
             name: token.name,
             image: token.picture,
-            provider: account.provider,
+            provider: token.provider,
           });
         }
       }
       return token;
     },
     async session({ session, token }) {
-      session.user.id = token.sub;
+      session.user.id = token.id; // <== token.sub 대신 항상 token.id 사용 (provider마다 다름)
       session.user.email = token.email;
       session.user.name = token.name;
       session.user.image = token.picture;
@@ -84,6 +79,6 @@ export default NextAuth({
     },
   },
   pages: {
-    signIn: "/auth/custom-signin",
+    signIn: "/auth/custom-signin", // 커스텀 로그인 모달
   },
 });

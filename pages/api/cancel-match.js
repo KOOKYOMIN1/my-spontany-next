@@ -7,7 +7,13 @@ export default async function handler(req, res) {
   if (!userId) return res.status(400).json({ error: "userId 없음" });
 
   const { db } = await connectToDatabase();
-  await db.collection("matchingQueue").deleteOne({ userId });
 
-  return res.status(200).json({ canceled: true });
+  // 혹시 userId가 숫자 타입 등으로 올 수 있으니, string 강제화
+  const userIdStr = String(userId);
+
+  const { deletedCount } = await db
+    .collection("matchingQueue")
+    .deleteOne({ userId: userIdStr });
+
+  return res.status(200).json({ canceled: true, deleted: deletedCount });
 }

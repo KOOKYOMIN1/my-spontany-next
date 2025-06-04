@@ -3,6 +3,9 @@ export default async function handler(req, res) {
 
   const { departure, budget, mood } = req.body;
 
+  if (!process.env.OPENAI_API_KEY || !process.env.PEXELS_API_KEY)
+    return res.status(500).json({ error: "API 키 누락" });
+
   try {
     // 1. OpenAI API 호출
     const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -75,87 +78,76 @@ export default async function handler(req, res) {
 
     // 한글 → 영어 여행지명 매핑 (확장 가능)
     const engMap = {
-  "속초": "Sokcho",
-  "여수": "Yeosu",
-  "춘천": "Chuncheon",
-  "강릉": "Gangneung",
-  "제주도": "Jeju",
-  "부산": "Busan",
-  "부산 해운대": "Haeundae Beach",
-  "서울": "Seoul",
-  "서울 홍대": "Hongdae Seoul",
-  "홍대": "Hongdae Seoul",
-  "인천": "Incheon",
-  "파주": "Paju",
-  "파주 출판도시": "Paju",
-  "남이섬": "Nami Island",
-  "양평": "Yangpyeong",
-  "양평 두물머리": "Yangpyeong",
-  "인천 차이나타운": "Incheon Chinatown",
-  "경주": "Gyeongju",
-  "광주": "Gwangju",
-  "전주": "Jeonju",
-  "울산": "Ulsan",
-  "대구": "Daegu",
-  "대전": "Daejeon",
-  "포항": "Pohang",
-  "수원": "Suwon",
-  "수원 화성": "Hwaseong Fortress Suwon",
-  "남양주": "Namyangju",
-  "남양주 다산생태공원": "Namyangju",
-  "의왕": "Uiwang",
-  "의왕 레솔레파크": "의왕 레솔레파크",
-  "화성": "Hwaseong Fortress",
-  "인천 송도 센트럴파크": "Incheon Songdo Central Park",
-  "송도 센트럴파크": "Incheon Songdo Central Park",
-  "센트럴파크": "Incheon Songdo Central Park",
-  "인천 월미도": "Wolmido Island, Incheon",
-  "월미도": "Wolmido Island, Incheon",
-  "인천 대공원": "Incheon Grand Park",
-  "강화도": "Ganghwa Island, Incheon",
-  "인천 소래포구": "Sorae Port, Incheon",
-  "대부도": "Incheon Daebu Island",
-  "영종도": "Yeongjong Island, Incheon",
-  "청라 호수공원": "Incheon Cheongna Lake Park",
-  "가평": "Gapyeong",
-  // 계속 확장 가능!
-};
+      "속초": "Sokcho",
+      "여수": "Yeosu",
+      "춘천": "Chuncheon",
+      "강릉": "Gangneung",
+      "제주도": "Jeju",
+      "부산": "Busan",
+      "부산 해운대": "Haeundae Beach",
+      "서울": "Seoul",
+      "서울 홍대": "Hongdae Seoul",
+      "홍대": "Hongdae Seoul",
+      "인천": "Incheon",
+      "파주": "Paju",
+      "파주 출판도시": "Paju",
+      "남이섬": "Nami Island",
+      "양평": "Yangpyeong",
+      "양평 두물머리": "Yangpyeong",
+      "인천 차이나타운": "Incheon Chinatown",
+      "경주": "Gyeongju",
+      "광주": "Gwangju",
+      "전주": "Jeonju",
+      "울산": "Ulsan",
+      "대구": "Daegu",
+      "대전": "Daejeon",
+      "포항": "Pohang",
+      "수원": "Suwon",
+      "수원 화성": "Hwaseong Fortress Suwon",
+      "남양주": "Namyangju",
+      "남양주 다산생태공원": "Namyangju",
+      "의왕": "Uiwang",
+      "의왕 레솔레파크": "의왕 레솔레파크",
+      "화성": "Hwaseong Fortress",
+      "인천 송도 센트럴파크": "Incheon Songdo Central Park",
+      "송도 센트럴파크": "Incheon Songdo Central Park",
+      "센트럴파크": "Incheon Songdo Central Park",
+      "인천 월미도": "Wolmido Island, Incheon",
+      "월미도": "Wolmido Island, Incheon",
+      "인천 대공원": "Incheon Grand Park",
+      "강화도": "Ganghwa Island, Incheon",
+      "인천 소래포구": "Sorae Port, Incheon",
+      "대부도": "Incheon Daebu Island",
+      "영종도": "Yeongjong Island, Incheon",
+      "청라 호수공원": "Incheon Cheongna Lake Park",
+      "가평": "Gapyeong"
+    };
 
     async function getPexelsImg(keyword) {
-  // 한글 검색
-  let url = `https://api.pexels.com/v1/search?query=${encodeURIComponent(keyword)}&per_page=8`;
-  let res = await fetch(url, {
-    headers: { Authorization: process.env.PEXELS_API_KEY },
-  });
-  let data = await res.json();
-  if (data.photos && data.photos.length > 0) {
-    // 관련성 높은 대표사진은 첫 번째
-    if (data.photos.length < 4) {
-      return data.photos[0].src.landscape || data.photos[0].src.original;
-    } else {
-      const idx = Math.floor(Math.random() * data.photos.length);
-      return data.photos[idx].src.landscape || data.photos[idx].src.original;
-    }
-  }
-  // engMap 영어 검색
-  // (동일하게 반복)
-  if (engMap[keyword]) {
-    url = `https://api.pexels.com/v1/search?query=${encodeURIComponent(engMap[keyword])}&per_page=8`;
-    res = await fetch(url, {
-      headers: { Authorization: process.env.PEXELS_API_KEY },
-    });
-    data = await res.json();
-    if (data.photos && data.photos.length > 0) {
-      if (data.photos.length < 4) {
-        return data.photos[0].src.landscape || data.photos[0].src.original;
-      } else {
+      if (!process.env.PEXELS_API_KEY) return null;
+      let url = `https://api.pexels.com/v1/search?query=${encodeURIComponent(keyword)}&per_page=8`;
+      let res = await fetch(url, {
+        headers: { Authorization: process.env.PEXELS_API_KEY },
+      });
+      let data = await res.json();
+      if (data.photos && data.photos.length > 0) {
         const idx = Math.floor(Math.random() * data.photos.length);
         return data.photos[idx].src.landscape || data.photos[idx].src.original;
       }
+      // engMap 영어 검색 (동일하게 반복)
+      if (engMap[keyword]) {
+        url = `https://api.pexels.com/v1/search?query=${encodeURIComponent(engMap[keyword])}&per_page=8`;
+        res = await fetch(url, {
+          headers: { Authorization: process.env.PEXELS_API_KEY },
+        });
+        data = await res.json();
+        if (data.photos && data.photos.length > 0) {
+          const idx = Math.floor(Math.random() * data.photos.length);
+          return data.photos[idx].src.landscape || data.photos[idx].src.original;
+        }
+      }
+      return null;
     }
-  }
-  return null;
-}
 
     // main 여행지 이미지
     if (result.main && !result.main.img && result.main.name) {

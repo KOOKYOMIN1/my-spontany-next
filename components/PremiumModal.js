@@ -5,13 +5,10 @@ import { useRouter } from "next/router";
 const Backdrop = styled.div`
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
-  width: 100vw;
-  height: 100vh;
+  width: 100vw; height: 100vh;
   background: rgba(50,30,20,0.23);
   z-index: 9999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: flex; align-items: center; justify-content: center;
 `;
 
 const ModalBox = styled.div`
@@ -19,8 +16,7 @@ const ModalBox = styled.div`
   padding: 2.4rem 2.2rem 1.7rem 2.2rem;
   border-radius: 1.25rem;
   box-shadow: 0 8px 40px #dbb89b24;
-  max-width: 350px;
-  width: 96vw;
+  max-width: 350px; width: 96vw;
   text-align: center;
   animation: pop 0.22s cubic-bezier(.7,.4,.5,1.25);
   @keyframes pop {
@@ -44,9 +40,7 @@ const Desc = styled.div`
 `;
 
 const BtnRow = styled.div`
-  display: flex;
-  gap: 12px;
-  justify-content: center;
+  display: flex; gap: 12px; justify-content: center;
 `;
 
 const Button = styled.button`

@@ -1,27 +1,41 @@
 import { useState, useEffect, useRef } from "react";
 import socket from "@/lib/socket-client";
 
-export default function ChatBox({ matchId, myName }) {
-  if (!socket) return <div>채팅 서버 연결 중...</div>;
+// 시간 포맷 (ex. 15:12 → 오후 3:12)
+function formatTime(ts) {
+  const d = new Date(ts);
+  const h = d.getHours();
+  const m = d.getMinutes().toString().padStart(2, "0");
+  const ampm = h < 12 ? "오전" : "오후";
+  const h12 = h % 12 || 12;
+  return `${ampm} ${h12}:${m}`;
+}
 
+export default function ChatBox({ matchId, myName }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [partnerJoined, setPartnerJoined] = useState(false);
   const [systemMsg, setSystemMsg] = useState("상대방을 기다리는 중...");
   const messagesEndRef = useRef(null);
+  const inputRef = useRef(null);
 
+  // socket null 방어
+  if (!socket) return <div>채팅 서버 연결 중...</div>;
+
+  // 스크롤 아래로
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // 입장/메시지 수신
   useEffect(() => {
     if (!matchId) return;
-    console.log(`[ChatBox mount] matchId: ${matchId}`);
 
     socket.emit("joinRoom", { matchId });
 
-    function onChatHistory(msgs) {
-      setMessages(msgs || []);
+    function onChatHistory(msgs = []) {
+      setMessages(msgs);
+      // 서버에서 메시지 넘길 때, partnerJoined도 같이 넘겨도 좋음!
     }
     function onReceiveMsg(msg) {
       setMessages(prev => [...prev, msg]);
@@ -29,7 +43,11 @@ export default function ChatBox({ matchId, myName }) {
     function onPartnerJoin() {
       setPartnerJoined(true);
       setSystemMsg("상대방이 입장했습니다!");
-      setTimeout(() => setSystemMsg(""), 1200);
+      // 입력창 포커스
+      setTimeout(() => {
+        setSystemMsg("");
+        inputRef.current?.focus();
+      }, 1000);
     }
     function onPartnerLeft() {
       setPartnerJoined(false);
@@ -53,7 +71,7 @@ export default function ChatBox({ matchId, myName }) {
     };
   }, [matchId]);
 
-  // 메시지 전송 (직접 상태 추가 X)
+  // 메시지 전송 (IME 조합 중 Enter 방지)
   const handleSend = () => {
     if (!input.trim()) return;
     const msg = {
@@ -62,8 +80,8 @@ export default function ChatBox({ matchId, myName }) {
       text: input,
       time: Date.now(),
     };
-    socket.emit("sendMessage", msg); // 서버 emit만!
-    setInput(""); // 입력란만 비움
+    socket.emit("sendMessage", msg);
+    setInput("");
   };
 
   return (
@@ -100,12 +118,18 @@ export default function ChatBox({ matchId, myName }) {
               fontSize: 13
             }}>{msg.sender === myName ? "나" : "상대"}</span>
             <span style={{ marginLeft: 8, fontSize: 15 }}>{msg.text}</span>
+            <span style={{
+              fontSize: 11,
+              color: "#b6a1d6",
+              marginLeft: 8
+            }}>{msg.time && formatTime(msg.time)}</span>
           </div>
         ))}
         <div ref={messagesEndRef} />
       </div>
       <div style={{ display: "flex", gap: 8 }}>
         <input
+          ref={inputRef}
           style={{
             flex: 1, border: "1px solid #ececec", borderRadius: 8, fontSize: 15,
             padding: "7px 11px"
@@ -113,7 +137,9 @@ export default function ChatBox({ matchId, myName }) {
           placeholder="메시지 입력"
           value={input}
           onChange={e => setInput(e.target.value)}
-          onKeyDown={e => e.key === "Enter" && handleSend()}
+          onKeyDown={e => {
+            if (e.key === "Enter" && !e.nativeEvent.isComposing) handleSend();
+          }}
           disabled={!partnerJoined}
         />
         <button

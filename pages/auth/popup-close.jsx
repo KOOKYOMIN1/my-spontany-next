@@ -9,13 +9,16 @@ export default function PopupClose() {
     if (
       typeof window !== "undefined" &&
       window.opener &&
+      !window.opener.closed &&
       window.name === "SpontanyLogin" &&
       status === "authenticated"
     ) {
       try {
         window.opener.location.reload();
       } catch (e) {}
-      setTimeout(() => window.close(), 400);
+      setTimeout(() => {
+        window.close();
+      }, 400);
     }
   }, [status]);
 

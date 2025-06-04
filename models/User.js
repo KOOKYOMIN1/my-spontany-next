@@ -7,4 +7,5 @@ const UserSchema = new mongoose.Schema({
   provider: String,
 }, { timestamps: true });
 
-export default mongoose.models.User || mongoose.model("User", UserSchema);
+// 핫리로드 시 모델 중복 방지
+export default mongoose.models?.User || mongoose.model("User", UserSchema);
