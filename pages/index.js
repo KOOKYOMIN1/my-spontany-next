@@ -15,7 +15,7 @@ const GlobalStyle = createGlobalStyle`
     100% { transform: scale(1); opacity: 1; }
   }
 `;
-//주석 추가 테스트
+//주석 추가 테스트 1
 // ----- 트렌디한 스타일 컴포넌트 -----
 const MOOD_BG_MAP = {
   기본: "https://images.unsplash.com/photo-1503264116251-35a269479413?auto=format&fit=crop&w=1600&q=80",
