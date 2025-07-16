@@ -5,8 +5,7 @@ import { useState, useEffect, useRef } from "react";
 import { FaLock, FaBan } from "react-icons/fa";
 import ChatBox from "@/components/ChatBox";
 import useIsPremium from "@/hooks/useIsPremium";
-import { useChatModal } from "@/contexts/ChatModalContext"; // 추가
-import { io } from "socket.io-client";
+import { useChatModal } from "@/contexts/ChatModalContext";
 import socket from "../lib/socket-client";
 
 // 전역 애니메이션 스타일 추가 (styled-components 사용 시)
@@ -232,43 +231,20 @@ const ResponsiveWrap = styled.div`
 
 function isValidOrigin(origin) {
   if (typeof origin !== "string") return false;
-  const cleaned = origin.replace(/\s/g, "");
-  return cleaned.length >= 2;
+  return origin.replace(/\s/g, "").length >= 2;
 }
 
-
 export default function Home() {
-  const { data: session } = useSession();
+  // 1. 모든 훅 선언
+  const [isClient, setIsClient] = useState(false);
+  const { data: session, status } = useSession({ required: true });
+  const isLoggedIn = !!session;
   const router = useRouter();
   const { chatOpen, setChatOpen } = useChatModal();
 
-  const [isClient, setIsClient] = useState(false);
-  const isLoggedIn = !!session;
-  const disabledStyle = {
-    cursor: "not-allowed",
-    background: "#f2f2f2",
-    color: "#bbb",
-  };
-
+  const [matchId, setMatchId] = useState("");
   const [showPremiumFields, setShowPremiumFields] = useState(false);
-  const handlePremiumOpen = () => setShowPremiumFields(v => !v);
   const [isPremium, setIsPremium] = useIsPremium();
-  const handlePremiumClick = () => setShowPremiumPopup(true);
-  const handleSetPremium = () => {
-    setIsPremium(true);
-    setShowPremiumPopup(false);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("spontanyIsPremium", "true");
-    }
-  };
-
-  const [matchId, setMatchId] = useState(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("spontanyMatchId") || "";
-    }
-    return "";
-  });
-
   const [mood, setMood] = useState("");
   const [origin, setOrigin] = useState("");
   const [budget, setBudget] = useState("");
@@ -276,86 +252,83 @@ export default function Home() {
   const [companionGender, setCompanionGender] = useState("");
   const [ageRange, setAgeRange] = useState("");
   const [notice, setNotice] = useState("");
-  const noticeTimeout = useRef();
   const [bgMood, setBgMood] = useState("기본");
   const [showLoginOverlay, setShowLoginOverlay] = useState(false);
   const [showPremiumPopup, setShowPremiumPopup] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [toastMsg, setToastMsg] = useState("");
-  const [matchStatus, setMatchStatus] = useState(""); // "", "waiting", "matching" 등
+  const [matchStatus, setMatchStatus] = useState(""); // "", "waiting" 등
 
-  const isMatching = matchStatus === "waiting" || matchStatus === "matching";
+  const noticeTimeout = useRef();
 
-  function showToast(msg) {
-    setToastMsg(msg);
-    setTimeout(() => setToastMsg(""), 1700);
-  }
-
-  async function handleLogin() {
-    try {
-      const res = await signIn("google", { redirect: false });
-      if (res?.error) showToast("SNS 로그인에 실패했어요. 다시 시도해 주세요");
-    } catch (e) {
-      showToast("SNS 로그인에 실패했어요. 다시 시도해 주세요");
-    }
-  }
-
+  // 2. 모든 useEffect 포함!
   useEffect(() => { setIsClient(true); }, []);
   useEffect(() => {
-    if (!isClient) return;
-    if (session === null) {
-      setMatchId("");
-      localStorage.removeItem("spontanyMatchId");
-      setChatOpen(false);
+    if (!socket) return;
+
+    function onMatched({ matchId }) {
+      console.log("onMatched 실행!", matchId);
+      setMatchId(matchId);
+      setChatOpen(true);
+      setIsLoading(false);
+      setMatchStatus("");
     }
-  }, [isClient, session]);
+    socket.on("matched", onMatched);
+    return () => {
+      socket.off("matched", onMatched);
+    };
+  }, [socket, setChatOpen]);
+
   useEffect(() => {
-    if (!isClient) return;
-    if (matchId) localStorage.setItem("spontanyMatchId", matchId);
-  }, [isClient, matchId]);
+    console.log("matchId:", matchId, "chatOpen:", chatOpen, "matchStatus:", matchStatus);
+  }, [matchId, chatOpen, matchStatus]);
+
+  // 3. 조건부 리턴 (이 아래로 훅 선언 X)
+  if (!isClient) return null;
+
+  // 4. 함수, 이벤트, 렌더링 등 나머지 코드
+  // ----- 헬퍼 함수 및 로직 -----
+  function isMatching() {
+    return matchStatus === "waiting";
+  }
+
+  // 입력/버튼/채팅모달 비활성화 조건
+  const allDisabled = isMatching() || isLoading;
+
+  const handleMoodClick = (newMood) => {
+    if (isMatching() || isLoading) return;
+    setMood(newMood);
+    setBgMood(newMood);
+  };
+
+  const handleOriginChange = (e) => {
+    if (!session || isMatching() || isLoading) return;
+    setOrigin(e.target.value.replace(/[0-9]/g, ""));
+  };
 
   const handleBudgetChange = (e) => {
     let val = e.target.value.replace(/[^0-9]/g, "");
-    if (!val) {
-      setBudget("");
-      return;
+    setBudget(val ? parseInt(val, 10).toLocaleString() : "");
+  };
+
+  const handleLogin = async () => {
+    try {
+      const res = await signIn("google", { redirect: false });
+      if (res?.error) showToast("SNS 로그인에 실패했어요. 다시 시도해 주세요");
+    } catch {
+      showToast("SNS 로그인에 실패했어요. 다시 시도해 주세요");
     }
-    setBudget(parseInt(val, 10).toLocaleString());
   };
 
-  const handleOriginChange = session
-    ? (e) => {
-        const onlyText = e.target.value.replace(/[0-9]/g, "");
-        setOrigin(onlyText);
-      }
-    : undefined;
-
-  const handleShowLoginOverlay = (e) => {
-    if (e) e.preventDefault();
-    setShowLoginOverlay(true);
-  };
-
-  const showLoginNotice = () => {
-    if (noticeTimeout.current) clearTimeout(noticeTimeout.current);
-    setNotice("로그인 후 이용 가능합니다");
-    noticeTimeout.current = setTimeout(() => setNotice(""), 1500);
+  const showToast = (msg) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(""), 1700);
   };
 
   const showInputNotice = () => {
     if (noticeTimeout.current) clearTimeout(noticeTimeout.current);
     setNotice("작성란을 입력해주세요");
     noticeTimeout.current = setTimeout(() => setNotice(""), 1500);
-  };
-
-  const handleOverlayClick = (e) => {
-    e.stopPropagation();
-    showLoginNotice();
-  };
-
-  const handleMoodClick = (newMood) => {
-    if (isMatching) return;
-    setMood(newMood);
-    setBgMood(newMood);
   };
 
   const EMOTION_MSG = {
@@ -365,8 +338,9 @@ export default function Home() {
     기본: "지금 내 기분에 딱 맞는 여행지를 찾아보세요.",
   };
 
+  // ------ 매칭 관련 ------
   const handleRecommend = async () => {
-    if (!session || isMatching) return;
+    if (!session || isMatching() || isLoading) return;
     if (!mood || !origin || !budget) return showInputNotice();
     setIsLoading(true);
     if (!isValidOrigin(origin)) {
@@ -383,70 +357,31 @@ export default function Home() {
     setIsLoading(false);
   };
 
-  // 매칭 요청 (fetch 제거, 소켓 emit만 사용)
   const handleRandomMatch = () => {
-    if (!session || isMatching) return;
+    if (!session || isMatching() || isLoading) return;
     if (!mood || !origin || !budget) return showInputNotice();
     setIsLoading(true);
     setMatchStatus("waiting");
     socket.emit("joinMatchQueue", {
-      userId: session.user.email, // 고유 식별자(이메일 등)
-      mood,
-      origin,
-      budget,
-      companionCount,
-      companionGender,
-      ageRange,
+      userId: session.user.email,
+      mood, origin, budget, companionCount, companionGender, ageRange,
     });
   };
 
-  // 매칭 취소
   const handleCancelMatchWait = () => {
-    if (!isMatching) return;
+    if (!isMatching()) return;
     socket.emit("cancelMatchWait");
-    // 상태 변경은 소켓 이벤트 리스너에서만!
   };
 
-  // 소켓 이벤트 리스너 등록 (매칭 관련 상태는 여기서만 변경)
-  useEffect(() => {
-    function onMatched({ matchId }) {
-      setMatchId(matchId);
-      setChatOpen(true);
-      setIsLoading(false);
-      setMatchStatus("");
-    }
-    function onMatchFailed() {
-      setIsLoading(false);
-      setMatchStatus("");
-      setNotice("매칭에 실패했습니다. 다시 시도해 주세요.");
-      setChatOpen(false);
-      setMatchId("");
-    }
-    function onMatchWaitCanceled() {
-      setIsLoading(false);
-      setMatchStatus("");
-      setChatOpen(false);
-      setMatchId("");
-    }
-    socket.on("matched", onMatched);
-    socket.on("matchFailed", onMatchFailed);
-    socket.on("matchWaitCanceled", onMatchWaitCanceled);
-    return () => {
-      socket.off("matched", onMatched);
-      socket.off("matchFailed", onMatchFailed);
-      socket.off("matchWaitCanceled", onMatchWaitCanceled);
-    };
-  }, []);
+  const disabledStyle = {
+    cursor: "not-allowed",
+    background: "#f2f2f2",
+    color: "#bbb",
+  };
 
-  useEffect(() => {
-    setMatchId("");
-    setChatOpen(false);
-    localStorage.removeItem("spontanyMatchId");
-    localStorage.removeItem("spontanyChatOpen");
-  }, []);
-
-  // 입력/버튼/채팅모달 비활성화 조건
-  const allDisabled = isMatching || isLoading;
+  const handlePremiumOpen = () => {
+    setShowPremiumFields((prev) => !prev);
+  };
 
   return (
     <>
@@ -580,7 +515,7 @@ export default function Home() {
                     onChange={isLoggedIn && isPremium && !allDisabled ? (e) => setCompanionCount(e.target.value) : undefined}
                     disabled={!isPremium || !isLoggedIn || allDisabled}
                     style={!isPremium || !isLoggedIn || allDisabled ? disabledStyle : undefined}
-                    onClick={!isPremium ? handlePremiumClick : undefined}
+                    onClick={!isPremium ? handlePremiumOpen : undefined}
                   >
                     <option value="">선택</option>
                     <option value="1">1명</option>
@@ -600,7 +535,7 @@ export default function Home() {
                     onChange={e => setCompanionGender(e.target.value)}
                     disabled={!isPremium || !isLoggedIn || allDisabled}
                     style={!isPremium || !isLoggedIn || allDisabled ? disabledStyle : undefined}
-                    onClick={!isPremium ? handlePremiumClick : undefined}
+                    onClick={!isPremium ? handlePremiumOpen : undefined}
                   >
                     <option value="">선택</option>
                     <option value="any">상관없음</option>
@@ -619,7 +554,7 @@ export default function Home() {
                     onChange={e => setAgeRange(e.target.value)}
                     disabled={!isPremium || !isLoggedIn || allDisabled}
                     style={!isPremium || !isLoggedIn || allDisabled ? disabledStyle : undefined}
-                    onClick={!isPremium ? handlePremiumClick : undefined}
+                    onClick={!isPremium ? handlePremiumOpen : undefined}
                   >
                     <option value="">선택</option>
                     <option value="20대">20대</option>
@@ -671,11 +606,11 @@ export default function Home() {
             <ButtonGroup>
               <PrimaryBtn
                 tabIndex={0}
-                aria-label={isMatching ? "매칭 취소하기" : "랜덤 매칭하기"}
+                aria-label={isMatching() ? "매칭 취소하기" : "랜덤 매칭하기"}
                 onClick={
                   isLoggedIn && isPremium
                     ? () => {
-                        if (isMatching) {
+                        if (isMatching()) {
                           handleCancelMatchWait();
                         } else {
                           if (!mood || !origin || !budget) {
@@ -702,12 +637,12 @@ export default function Home() {
                     : undefined
                 }
               >
-                {isMatching
+                {isMatching()
                   ? "매칭 취소하기"
                   : "랜덤 매칭하기"}
               </PrimaryBtn>
 
-              {(isMatching) && (
+              {isMatching() && (
                 <MatchNotice>
                   상대방을 찾는 중입니다... <br />잠시만 기다려주세요!
                 </MatchNotice>
@@ -823,7 +758,7 @@ export default function Home() {
             </button>
           )}
           {/* 채팅 팝업 */}
-          {isClient && matchId && session !== null && chatOpen && matchStatus === "" && !allDisabled && (
+          {isClient && matchId && session !== null && chatOpen && (
             <ChatPopupBackdrop onClick={() => setChatOpen(false)}>
               <ChatPopupWrap onClick={e => e.stopPropagation()}>
                 <ChatPopupHeader>
